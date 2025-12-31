@@ -95,6 +95,12 @@
             <button id="export-symbols-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors hidden ml-2">
                 Export Symbols
             </button>
+            <button id="clean-project-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ml-2 hidden" title="Clean temporary files (.lst)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Clean
+            </button>
         </div>
     </header>
 
@@ -440,6 +446,7 @@
         const compileBtn = document.getElementById('compile-btn');
         const downloadBtn = document.getElementById('download-btn');
         const exportSymbolsBtn = document.getElementById('export-symbols-btn');
+        const cleanProjectBtn = document.getElementById('clean-project-btn');
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
 
@@ -674,8 +681,20 @@
 
         editor.on("change", () => {
             if (currentFile) {
-                const textEncoder = new TextEncoder();
-                projectFiles[currentFile] = textEncoder.encode(editor.getValue());
+                // Only save editable text files (not .bin, .rom, .col binary files)
+                const lowerFilename = currentFile.toLowerCase();
+                const isEditable = lowerFilename.endsWith('.asm') ||
+                                  lowerFilename.endsWith('.z80') ||
+                                  lowerFilename.endsWith('.s') ||
+                                  lowerFilename.endsWith('.inc') ||
+                                  lowerFilename.endsWith('.h') ||
+                                  lowerFilename.endsWith('.txt') ||
+                                  lowerFilename.endsWith('.md');
+
+                if (isEditable) {
+                    const textEncoder = new TextEncoder();
+                    projectFiles[currentFile] = textEncoder.encode(editor.getValue());
+                }
             }
             updateCompileButtonState();
         });
@@ -693,20 +712,22 @@
 
         // --- Parser Classes ---
         class Instruction {
-            constructor(label, mnemonic, operands, lineNumber = 0) { 
-                this.label = label; 
-                this.mnemonic = mnemonic; 
-                this.operands = operands; 
+            constructor(label, mnemonic, operands, lineNumber = 0, sourceLine = '') {
+                this.label = label;
+                this.mnemonic = mnemonic;
+                this.operands = operands;
                 this.lineNumber = lineNumber;
+                this.sourceLine = sourceLine;
             }
         }
 
         class Directive {
-            constructor(label, name, operands, lineNumber = 0) { 
-                this.label = label; 
-                this.name = name; 
-                this.operands = operands; 
+            constructor(label, name, operands, lineNumber = 0, sourceLine = '') {
+                this.label = label;
+                this.name = name;
+                this.operands = operands;
                 this.lineNumber = lineNumber;
+                this.sourceLine = sourceLine;
             }
         }
 
@@ -991,9 +1012,9 @@
                     const operands = this.parse_operands(operands_str || '');
 
                     if (this.directives.includes(mnemonic_upper)) {
-                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1));
+                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1, line));
                     } else {
-                        this.tokens.push(new Instruction(label, mnemonic_clean.toLowerCase(), operands, lineNum + 1));
+                        this.tokens.push(new Instruction(label, mnemonic_clean.toLowerCase(), operands, lineNum + 1, line));
                     }
                 }
                 return this.tokens;
@@ -1172,6 +1193,9 @@
                 };
                 this.lastNonTempSymbol = '';
                 this.numberParser = new NumberParser();
+                this.listingLines = []; // For .LST file generation
+                this.sourceLines = [];   // Store original source lines
+                this.errorCount = 0;     // Track errors for listing
             }
 
             buildImage({ mode = 'range', base = null, size = null, fill = 0xFF } = {}) {
@@ -1213,17 +1237,20 @@
                     this.currentPass = 1;
                     log(`--- Pass 1: Conditional processing and macro expansion for ${mainFile} ---`);
                     const pass1_source = await this.expandMacrosAndConditionals(mainFile);
-                    
+
+                    // Store all source lines for listing generation
+                    this.sourceLines = pass1_source.split('\n');
+
                     const lexer = new Lexer(pass1_source);
                     let tokens = lexer.tokenize();
-                    
+
                     // CPU directive is optional - default to Z80 if not specified
                     const cpuDirective = tokens.find(t => t.name === 'CPU');
                     if (cpuDirective && cpuDirective.operands[0].value.toUpperCase() !== 'Z80') {
                         throw new Error("Only Z80 CPU is supported (CPU directive found but not set to 'Z80')");
                     }
                     // If no CPU directive, we default to Z80 (zmac-compatible behavior)
-                    
+
                     const fnameDirective = tokens.find(t => t.name === 'FNAME');
                     if (fnameDirective) {
                         outputFilename = fnameDirective.operands[0].value;
@@ -1232,7 +1259,7 @@
                     this.currentPass = 2;
                     log('--- Pass 2: Building symbol table ---');
                     this.buildSymbolTable(tokens);
-                    
+
                     this.currentPass = 3;
                     log('--- Pass 3: Generating binary code ---');
                     this.generateCode(tokens);
@@ -1730,7 +1757,12 @@
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
-                    
+
+                    // Capture listing information - save start PC
+                    const startPC = this.pc;
+                    let hasError = false;
+                    let errorMsg = '';
+
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
@@ -1853,11 +1885,36 @@
                                 }
                             }
                         }
-                        this.pc = this.output.length; 
+                        this.pc = this.output.length;
                     } catch (error) {
+                        // Capture error for listing
+                        hasError = true;
+                        errorMsg = error.message;
+                        this.errorCount++;
+
                         // Add context to the error
                         const contextMsg = `Line ${this.currentLine}: ${token.mnemonic || 'directive'} ${(token.operands || []).map(o => o.value).join(', ')} - ${error.message}`;
                         throw new Error(contextMsg);
+                    } finally {
+                        // Create listing entry after processing token
+                        const bytesGenerated = this.output.slice(startPC, this.pc);
+
+                        // For ORG and other PC-changing directives, show the new PC, not the old one
+                        let displayAddress = startPC;
+                        if (token instanceof Directive && token.name === 'ORG') {
+                            displayAddress = this.pc; // Show the ORG target address
+                        }
+
+                        const listingEntry = {
+                            lineNum: token.lineNumber || 0,
+                            address: displayAddress,
+                            bytes: Array.from(bytesGenerated),
+                            sourceLine: token.sourceLine || '',
+                            label: token.label || '',
+                            hasError: hasError,
+                            errorMsg: errorMsg
+                        };
+                        this.listingLines.push(listingEntry);
                     }
                 }
             }
@@ -1872,6 +1929,62 @@
                     timestamp: new Date().toISOString()
                 };
                 return JSON.stringify(data, null, 2);
+            }
+
+            generateListingFile() {
+                let output = '';
+
+                console.log(`DEBUG: generateListingFile() called, sourceLines.length = ${this.sourceLines.length}, listingLines.length = ${this.listingLines.length}`);
+
+                // Create a map of line numbers to listing entries
+                const listingMap = {};
+                for (const entry of this.listingLines) {
+                    listingMap[entry.lineNum] = entry;
+                }
+
+                // Iterate through ALL source lines
+                for (let i = 0; i < this.sourceLines.length; i++) {
+                    const lineNum = String(i + 1).padStart(4, '0');
+                    const sourceLine = this.sourceLines[i];
+                    const entry = listingMap[i + 1];
+
+                    // Check if this is a directive that doesn't generate code (ORG, EQU, SET, etc.)
+                    const isNonCodeDirective = /^\s*\.?(org|equ|set|if|else|endif|macro|endm|include)\b/i.test(sourceLine);
+
+                    // Check if line is blank or only whitespace/comment
+                    const isBlankLine = sourceLine.trim() === '' || sourceLine.trim().startsWith(';');
+
+                    if (isBlankLine) {
+                        // Blank line: just line number and spaces
+                        output += `${lineNum}   ${' '.repeat(4)}             ${sourceLine}\n`;
+                    } else if (!entry || isNonCodeDirective || (entry && entry.bytes.length === 0)) {
+                        // Non-code directive or no bytes: show address but no bytes
+                        const address = entry ? entry.address.toString(16).toUpperCase().padStart(4, '0') : '    ';
+                        output += `${lineNum}   ${address}             ${sourceLine}\n`;
+                    } else {
+                        // Has bytes: show address and bytes
+                        const address = entry.address.toString(16).toUpperCase().padStart(4, '0');
+
+                        // Format bytes WITHOUT spaces (like TASM: "000000000000" not "00 00 00 00")
+                        const hexBytes = entry.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('');
+
+                        // Pad bytes to 12 characters (fits 6 bytes)
+                        const bytesStr = hexBytes.padEnd(12, ' ');
+
+                        output += `${lineNum}   ${address} ${bytesStr} ${sourceLine}\n`;
+                    }
+
+                    // If there's an error, add error message on next line
+                    if (entry && entry.hasError) {
+                        const errorLine = `${sourceLine.split(/\s+/)[0]} line ${lineNum}: ${entry.errorMsg}`;
+                        output += errorLine + '\n';
+                    }
+                }
+
+                // Add final summary line
+                output += `tasm: Number of errors = ${this.errorCount}\n`;
+
+                return output;
             }
 
             getOpcodeKey(instruction) {
@@ -2147,10 +2260,23 @@
                 assemblerInstance = assembler;
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
-                document.getElementById('test-buttons-container').classList.remove('hidden');                
+                document.getElementById('test-buttons-container').classList.remove('hidden');
+
+                // Generate .LST file
+                const lstContent = assembler.generateListingFile();
+                const lstFilename = `${sourceBaseName}.lst`;
+                projectFiles[lstFilename] = new TextEncoder().encode(lstContent);
+                log(`Generated listing file: ${lstFilename}`, 'success');
+
+                // Refresh file tree to show the new .LST file
+                renderFileTree();
+
+                // Show clean button when temporary files exist
+                cleanProjectBtn.classList.remove('hidden');
+
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
             } else {
-                document.getElementById('test-buttons-container').classList.add('hidden');                
+                document.getElementById('test-buttons-container').classList.add('hidden');
             }
         });
 
@@ -2220,6 +2346,49 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             log(`Exported symbol table to ${outputFilename.replace(/\.[^/.]+$/, '') + '_symbols.json'}.`);
+        });
+
+        // Clean Project button - removes temporary files (.lst)
+        cleanProjectBtn.addEventListener('click', () => {
+            // Define temporary file extensions to remove
+            const tempExtensions = ['.lst'];
+            let removedCount = 0;
+
+            // Find and remove temporary files
+            const filesToRemove = [];
+            for (const filename in projectFiles) {
+                const lowerFilename = filename.toLowerCase();
+                if (tempExtensions.some(ext => lowerFilename.endsWith(ext))) {
+                    filesToRemove.push(filename);
+                }
+            }
+
+            if (filesToRemove.length === 0) {
+                log('No temporary files to clean.', 'info');
+                return;
+            }
+
+            // Confirm deletion
+            if (confirm(`Remove ${filesToRemove.length} temporary file(s)?\n\n${filesToRemove.join('\n')}`)) {
+                filesToRemove.forEach(filename => {
+                    delete projectFiles[filename];
+                    removedCount++;
+                });
+
+                // Refresh the file tree display
+                renderFileTree();
+
+                // If current file was removed, clear the editor
+                if (filesToRemove.includes(currentFile)) {
+                    currentFile = null;
+                    editor.setValue('');
+                }
+
+                // Hide clean button after cleaning
+                cleanProjectBtn.classList.add('hidden');
+
+                log(`Removed ${removedCount} temporary file(s).`, 'success');
+            }
         });
 
         // Platform selection handler
