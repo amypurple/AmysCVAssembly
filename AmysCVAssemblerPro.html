@@ -193,6 +193,12 @@
             <button id="build-lib-btn" class="hidden">Build Library (ASM→LIB)</button>
             <button id="create-lib-btn" class="hidden">Create Library from REL</button>
             <button id="export-symbols-btn" class="hidden">Export Symbols</button>
+            <button id="clean-project-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ml-2 hidden" title="Clean temporary files (.lst)">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Clean
+            </button>
             <button id="test-cv-screen" class="hidden">Test CV Screen</button>
             <button id="test-dina-screen" class="hidden">Test DINA Screen</button>
         </div>
@@ -542,6 +548,7 @@
         const compileBtn = document.getElementById('compile-btn');
         const downloadBtn = document.getElementById('download-btn');
         const exportSymbolsBtn = document.getElementById('export-symbols-btn');
+        const cleanProjectBtn = document.getElementById('clean-project-btn');
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
 
@@ -1063,7 +1070,7 @@
             }
         }
 
-        function openFile(filename) {
+        async function openFile(filename) {
             if (!projectFiles[filename]) {
                 log(`File not found: ${filename}`, 'error');
                 return;
@@ -1072,8 +1079,121 @@
             currentFile = filename;
             const content = projectFiles[filename];
 
+            // Pro version: Handle .LIB files specially
+            if (filename.toLowerCase().endsWith('.lib')) {
+                try {
+                    const zip = await JSZip.loadAsync(content);
+                    const moduleInfos = [];
+
+                    // Parse all .REL files in the library
+                    for (const [relFilename, file] of Object.entries(zip.files)) {
+                        if (!file.dir && relFilename.toLowerCase().endsWith('.rel')) {
+                            try {
+                                const relData = await file.async('uint8array');
+                                const parser = new RelFileParser(relData);
+                                const module = parser.parse();
+                                moduleInfos.push({
+                                    filename: relFilename,
+                                    module: module
+                                });
+                            } catch (e) {
+                                moduleInfos.push({
+                                    filename: relFilename,
+                                    error: e.message
+                                });
+                            }
+                        }
+                    }
+
+                    // Display .LIB file information in editor
+                    let libInfo = `╔═══════════════════════════════════════════════════════════════╗\n`;
+                    libInfo += `║  LIBRARY FILE: ${filename.padEnd(48)}║\n`;
+                    libInfo += `╚═══════════════════════════════════════════════════════════════╝\n\n`;
+
+                    libInfo += `Total Modules: ${moduleInfos.length}\n\n`;
+
+                    if (moduleInfos.length === 0) {
+                        libInfo += `(Empty library - no .REL files found)\n`;
+                    } else {
+                        // Summary statistics
+                        const validModules = moduleInfos.filter(m => !m.error);
+                        const totalPublicSymbols = validModules.reduce((sum, m) => sum + m.module.publicSymbols.length, 0);
+                        const totalCodeSize = validModules.reduce((sum, m) => sum + m.module.codeSize, 0);
+                        const totalDataSize = validModules.reduce((sum, m) => sum + m.module.dataSize, 0);
+
+                        libInfo += `Summary:\n`;
+                        libInfo += `  Valid Modules: ${validModules.length}\n`;
+                        libInfo += `  Total Public Symbols: ${totalPublicSymbols}\n`;
+                        libInfo += `  Total Code Size: ${totalCodeSize} bytes\n`;
+                        libInfo += `  Total Data Size: ${totalDataSize} bytes\n\n`;
+
+                        libInfo += `${'═'.repeat(63)}\n\n`;
+
+                        // List each module
+                        moduleInfos.forEach((info, index) => {
+                            libInfo += `Module ${index + 1}: ${info.filename}\n`;
+                            libInfo += `${'─'.repeat(63)}\n`;
+
+                            if (info.error) {
+                                libInfo += `  ERROR: ${info.error}\n\n`;
+                            } else {
+                                const m = info.module;
+                                libInfo += `  Module Name: ${m.name || 'Unknown'}\n`;
+                                libInfo += `  Code Size: ${m.codeSize} bytes\n`;
+                                libInfo += `  Data Size: ${m.dataSize} bytes\n`;
+
+                                if (m.publicSymbols.length > 0) {
+                                    libInfo += `\n  Exported Symbols (${m.publicSymbols.length}):\n`;
+                                    m.publicSymbols.forEach(sym => {
+                                        const addrTypeStr = sym.addressType === 0x01 ? 'CODE' :
+                                                          sym.addressType === 0x02 ? 'DATA' : 'OTHER';
+                                        libInfo += `    • ${sym.name.padEnd(24)} = $${sym.value.toString(16).padStart(4, '0').toUpperCase()} (${addrTypeStr})\n`;
+                                    });
+                                }
+
+                                if (m.externalRefs.length > 0) {
+                                    const uniqueExternals = [...new Set(m.externalRefs.map(r => r.symbol))];
+                                    libInfo += `\n  External Dependencies (${uniqueExternals.length}):\n`;
+                                    uniqueExternals.forEach(sym => {
+                                        const refs = m.externalRefs.filter(r => r.symbol === sym);
+                                        libInfo += `    • ${sym} (${refs.length} reference${refs.length > 1 ? 's' : ''})\n`;
+                                    });
+                                }
+
+                                libInfo += '\n';
+                            }
+                        });
+
+                        libInfo += `${'═'.repeat(63)}\n\n`;
+                    }
+
+                    libInfo += `USAGE:\n`;
+                    libInfo += `  This library can be used during linking. The smart linker will\n`;
+                    libInfo += `  automatically include only the modules needed by your program.\n\n`;
+                    libInfo += `  To use:\n`;
+                    libInfo += `  1. Add this .LIB file to your project\n`;
+                    libInfo += `  2. Compile your .asm files to .REL format\n`;
+                    libInfo += `  3. Switch output mode to Binary (.bin)\n`;
+                    libInfo += `  4. Click "Link Modules" to create the final binary\n`;
+
+                    editor.setValue(libInfo);
+
+                    // Hide download button for .LIB files (each file has its own download icon)
+                    downloadBtn.classList.add('hidden');
+
+                    log(`Loaded library: ${filename} with ${moduleInfos.length} module(s)`, 'success');
+                    if (moduleInfos.length > 0) {
+                        const validModules = moduleInfos.filter(m => !m.error);
+                        const totalPublicSymbols = validModules.reduce((sum, m) => sum + m.module.publicSymbols.length, 0);
+                        log(`  ${validModules.length} valid modules, ${totalPublicSymbols} exported symbols`, 'info');
+                    }
+                } catch (e) {
+                    editor.setValue(`--- ERROR PARSING .LIB FILE ---\n\n${e.message}\n\nNote: .LIB files should be ZIP archives containing .REL files`);
+                    log(`Error parsing .LIB file: ${e.message}`, 'error');
+                }
+            }
             // Pro version: Handle .REL files specially
-            if (filename.toLowerCase().endsWith('.rel')) {
+            else if (filename.toLowerCase().endsWith('.rel')) {
                 try {
                     // Create a copy to avoid parser modifying the original data
                     const parser = new RelFileParser(content.slice(0));
@@ -1184,20 +1304,22 @@
 
         // --- Parser Classes ---
         class Instruction {
-            constructor(label, mnemonic, operands, lineNumber = 0) { 
-                this.label = label; 
-                this.mnemonic = mnemonic; 
-                this.operands = operands; 
+            constructor(label, mnemonic, operands, lineNumber = 0, sourceLine = '') {
+                this.label = label;
+                this.mnemonic = mnemonic;
+                this.operands = operands;
                 this.lineNumber = lineNumber;
+                this.sourceLine = sourceLine;
             }
         }
 
         class Directive {
-            constructor(label, name, operands, lineNumber = 0) { 
-                this.label = label; 
-                this.name = name; 
-                this.operands = operands; 
+            constructor(label, name, operands, lineNumber = 0, sourceLine = '') {
+                this.label = label;
+                this.name = name;
+                this.operands = operands;
                 this.lineNumber = lineNumber;
+                this.sourceLine = sourceLine;
             }
         }
 
@@ -1471,7 +1593,7 @@
                     }
 
                     if (!mnemonic) {
-                        if (label) this.tokens.push(new Directive(label, 'LABEL', [], lineNum + 1));
+                        if (label) this.tokens.push(new Directive(label, 'LABEL', [], lineNum + 1, line));
                         continue;
                     }
 
@@ -1484,9 +1606,9 @@
                     const operands = this.parse_operands(operands_str || '');
 
                     if (this.directives.includes(mnemonic_upper)) {
-                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1));
+                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1, line));
                     } else {
-                        this.tokens.push(new Instruction(label, mnemonic.toLowerCase(), operands, lineNum + 1));
+                        this.tokens.push(new Instruction(label, mnemonic.toLowerCase(), operands, lineNum + 1, line));
                     }
                 }
                 return this.tokens;
@@ -2308,6 +2430,9 @@
                 };
                 this.lastNonTempSymbol = '';
                 this.numberParser = new NumberParser();
+                this.listingLines = []; // For .LST file generation
+                this.sourceLines = [];   // Store original source lines
+                this.errorCount = 0;     // Track errors for listing
 
                 // Pro version: Segment management for .REL output
                 this.outputMode = 'binary'; // 'binary' or 'rel'
@@ -2364,7 +2489,10 @@
                     this.currentPass = 1;
                     log(`--- Pass 1: Conditional processing and macro expansion for ${mainFile} ---`);
                     const pass1_source = await this.expandMacrosAndConditionals(mainFile);
-                    
+
+                    // Store all source lines for listing generation
+                    this.sourceLines = pass1_source.split('\n');
+
                     const lexer = new Lexer(pass1_source);
                     let tokens = lexer.tokenize();
                     
@@ -2972,7 +3100,12 @@
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
-                    
+
+                    // Track state for listing generation
+                    const startPC = this.pc;
+                    let hasError = false;
+                    let errorMsg = '';
+
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
@@ -3139,11 +3272,36 @@
                                 }
                             }
                         }
-                        this.pc = this.output.length; 
+                        this.pc = this.output.length;
                     } catch (error) {
+                        // Capture error for listing
+                        hasError = true;
+                        errorMsg = error.message;
+                        this.errorCount++;
+
                         // Add context to the error
                         const contextMsg = `Line ${this.currentLine}: ${token.mnemonic || 'directive'} ${(token.operands || []).map(o => o.value).join(', ')} - ${error.message}`;
                         throw new Error(contextMsg);
+                    } finally {
+                        // Create listing entry after processing token
+                        const bytesGenerated = this.output.slice(startPC, this.pc);
+
+                        // For ORG and other PC-changing directives, show the new PC, not the old one
+                        let displayAddress = startPC;
+                        if (token instanceof Directive && token.name === 'ORG') {
+                            displayAddress = this.pc; // Show the ORG target address
+                        }
+
+                        const listingEntry = {
+                            lineNum: token.lineNumber || 0,
+                            address: displayAddress,
+                            bytes: Array.from(bytesGenerated),
+                            sourceLine: token.sourceLine || '',
+                            label: token.label || '',
+                            hasError: hasError,
+                            errorMsg: errorMsg
+                        };
+                        this.listingLines.push(listingEntry);
                     }
                 }
             }
@@ -3158,6 +3316,62 @@
                     timestamp: new Date().toISOString()
                 };
                 return JSON.stringify(data, null, 2);
+            }
+
+            generateListingFile() {
+                let output = '';
+
+                console.log(`DEBUG: generateListingFile() called, sourceLines.length = ${this.sourceLines.length}, listingLines.length = ${this.listingLines.length}`);
+
+                // Create a map of line numbers to listing entries
+                const listingMap = {};
+                for (const entry of this.listingLines) {
+                    listingMap[entry.lineNum] = entry;
+                }
+
+                // Iterate through ALL source lines
+                for (let i = 0; i < this.sourceLines.length; i++) {
+                    const lineNum = String(i + 1).padStart(4, '0');
+                    const sourceLine = this.sourceLines[i];
+                    const entry = listingMap[i + 1];
+
+                    // Check if this is a directive that doesn't generate code (ORG, EQU, SET, etc.)
+                    const isNonCodeDirective = /^\s*\.?(org|equ|set|if|else|endif|macro|endm|include)\b/i.test(sourceLine);
+
+                    // Check if line is blank or only whitespace/comment
+                    const isBlankLine = sourceLine.trim() === '' || sourceLine.trim().startsWith(';');
+
+                    if (isBlankLine) {
+                        // Blank line: just line number and spaces
+                        output += `${lineNum}   ${' '.repeat(4)}             ${sourceLine}\n`;
+                    } else if (!entry || isNonCodeDirective || (entry && entry.bytes.length === 0)) {
+                        // Non-code directive or no bytes: show address but no bytes
+                        const address = entry ? entry.address.toString(16).toUpperCase().padStart(4, '0') : '    ';
+                        output += `${lineNum}   ${address}             ${sourceLine}\n`;
+                    } else {
+                        // Has bytes: show address and bytes
+                        const address = entry.address.toString(16).toUpperCase().padStart(4, '0');
+
+                        // Format bytes WITHOUT spaces (like TASM: "000000000000" not "00 00 00 00")
+                        const hexBytes = entry.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('');
+
+                        // Pad bytes to 12 characters (fits 6 bytes)
+                        const bytesStr = hexBytes.padEnd(12, ' ');
+
+                        output += `${lineNum}   ${address} ${bytesStr} ${sourceLine}\n`;
+                    }
+
+                    // If there's an error, add error message on next line
+                    if (entry && entry.hasError) {
+                        const errorLine = `${sourceLine.split(/\s+/)[0]} line ${lineNum}: ${entry.errorMsg}`;
+                        output += errorLine + '\n';
+                    }
+                }
+
+                // Add final summary line
+                output += `tasm: Number of errors = ${this.errorCount}\n`;
+
+                return output;
             }
 
             getOpcodeKey(instruction) {
@@ -3703,6 +3917,19 @@
 
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
+
+                // Generate .LST file
+                const lstContent = assembler.generateListingFile();
+                const lstFilename = `${sourceBaseName}.lst`;
+                projectFiles[lstFilename] = new TextEncoder().encode(lstContent);
+                log(`Generated listing file: ${lstFilename}`, 'success');
+
+                // Refresh file tree to show the new .LST file
+                renderFileTree();
+
+                // Show clean button when temporary files exist
+                cleanProjectBtn.classList.remove('hidden');
+
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
                 updateAdaptiveMenu(); // Update adaptive menu with new available actions
             }
@@ -3828,6 +4055,49 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             log(`Exported symbol table to ${outputFilename.replace(/\.[^/.]+$/, '') + '_symbols.json'}.`);
+        });
+
+        // Clean Project button - removes temporary files (.lst)
+        cleanProjectBtn.addEventListener('click', () => {
+            // Define temporary file extensions to remove
+            const tempExtensions = ['.lst'];
+            let removedCount = 0;
+
+            // Find and remove temporary files
+            const filesToRemove = [];
+            for (const filename in projectFiles) {
+                const lowerFilename = filename.toLowerCase();
+                if (tempExtensions.some(ext => lowerFilename.endsWith(ext))) {
+                    filesToRemove.push(filename);
+                }
+            }
+
+            if (filesToRemove.length === 0) {
+                log('No temporary files to clean.', 'info');
+                return;
+            }
+
+            // Confirm deletion
+            if (confirm(`Remove ${filesToRemove.length} temporary file(s)?\n\n${filesToRemove.join('\n')}`)) {
+                filesToRemove.forEach(filename => {
+                    delete projectFiles[filename];
+                    removedCount++;
+                });
+
+                // Refresh the file tree display
+                renderFileTree();
+
+                // If current file was removed, clear the editor
+                if (filesToRemove.includes(currentFile)) {
+                    currentFile = null;
+                    editor.setValue('');
+                }
+
+                // Hide clean button after cleaning
+                cleanProjectBtn.classList.add('hidden');
+
+                log(`Removed ${removedCount} temporary file(s).`, 'success');
+            }
         });
 
         // Pro version: Link Modules button
