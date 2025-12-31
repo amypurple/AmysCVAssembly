@@ -3668,9 +3668,19 @@
                         : 'Download .REL (LINK-80)';
 
                     // Auto-add .REL file to project for easier workflow
-                    projectFiles[outputFilename] = binary;
+                    // Ensure we store a proper Uint8Array (defensive copy to avoid any reference issues)
+                    projectFiles[outputFilename] = new Uint8Array(binary);
                     const formatType = outputMode === 'rel-extended' ? 'Extended format' : 'LINK-80 format';
                     log(`Added ${outputFilename} to project files (${formatType})`, 'success');
+                    console.log(`[DEBUG] Saved .REL to project: ${outputFilename}, size: ${binary.length} bytes`);
+
+                    // Verify the file was added correctly by trying to read it back
+                    if (projectFiles[outputFilename]) {
+                        console.log(`[DEBUG] Verification: File ${outputFilename} exists in project, size: ${projectFiles[outputFilename].length}`);
+                    } else {
+                        console.error(`[DEBUG] ERROR: File ${outputFilename} was not added to project!`);
+                    }
+
                     renderFileTree();
                     updateLinkButtonVisibility();
                 } else {
