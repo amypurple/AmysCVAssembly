@@ -1075,7 +1075,8 @@
             // Pro version: Handle .REL files specially
             if (filename.toLowerCase().endsWith('.rel')) {
                 try {
-                    const parser = new RelFileParser(content);
+                    // Create a copy to avoid parser modifying the original data
+                    const parser = new RelFileParser(content.slice(0));
                     const module = parser.parse();
 
                     // Display .REL file information in editor
@@ -1160,8 +1161,12 @@
 
         editor.on("change", () => {
             if (currentFile) {
-                const textEncoder = new TextEncoder();
-                projectFiles[currentFile] = textEncoder.encode(editor.getValue());
+                // Only save changes for editable file types (not .REL, .LIB, .BIN, etc.)
+                const fileType = getFileType(currentFile);
+                if (fileType && FILE_TYPES[fileType] && FILE_TYPES[fileType].editable) {
+                    const textEncoder = new TextEncoder();
+                    projectFiles[currentFile] = textEncoder.encode(editor.getValue());
+                }
             }
             updateCompileButtonState();
         });
@@ -1713,6 +1718,11 @@
         // Pro version: .REL file parser
         class RelFileParser {
             constructor(bytes) {
+                this.parserId = Math.random().toString(36).substr(2, 9);
+                console.log(`[DEBUG] Creating RelFileParser instance: ${this.parserId}`);
+                console.log(`[DEBUG] Parser ${this.parserId} received bytes:`, bytes.constructor.name, 'length:', bytes.length);
+                console.log(`[DEBUG] Parser ${this.parserId} first 20 bytes:`, Array.from(bytes.slice(0, 20)));
+                console.log(`[DEBUG] Parser ${this.parserId} created from:`, new Error().stack);
                 this.reader = new BitStreamReader(bytes);
                 this.module = {
                     name: '',
@@ -1756,9 +1766,9 @@
                         for (let i = 0; i < 16; i++) {
                             this.reader.readBits(8);
                         }
-                        console.log('[DEBUG] Detected EXTENDED format .REL file (Linkstor80)');
+                        console.log(`[DEBUG] Parser ${this.parserId}: Detected EXTENDED format .REL file (Linkstor80)`);
                     } else {
-                        console.log('[DEBUG] Detected STANDARD format .REL file (LINK-80)');
+                        console.log(`[DEBUG] Parser ${this.parserId}: Detected STANDARD format .REL file (LINK-80)`);
                     }
                 }
             }
@@ -3668,8 +3678,8 @@
                         : 'Download .REL (LINK-80)';
 
                     // Auto-add .REL file to project for easier workflow
-                    // Ensure we store a proper Uint8Array (defensive copy to avoid any reference issues)
-                    projectFiles[outputFilename] = new Uint8Array(binary);
+                    // Create a proper deep copy to avoid any reference or mutation issues
+                    projectFiles[outputFilename] = binary.slice(0);
                     const formatType = outputMode === 'rel-extended' ? 'Extended format' : 'LINK-80 format';
                     log(`Added ${outputFilename} to project files (${formatType})`, 'success');
                     console.log(`[DEBUG] Saved .REL to project: ${outputFilename}, size: ${binary.length} bytes`);
@@ -3677,6 +3687,10 @@
                     // Verify the file was added correctly by trying to read it back
                     if (projectFiles[outputFilename]) {
                         console.log(`[DEBUG] Verification: File ${outputFilename} exists in project, size: ${projectFiles[outputFilename].length}`);
+
+                        // Verify the data is intact by checking first few bytes
+                        const first10 = Array.from(projectFiles[outputFilename].slice(0, 10));
+                        console.log(`[DEBUG] First 10 bytes:`, first10);
                     } else {
                         console.error(`[DEBUG] ERROR: File ${outputFilename} was not added to project!`);
                     }
@@ -3883,7 +3897,8 @@
                     console.log(`[DEBUG] Loading ${relFile}, type: ${relData.constructor.name}, length: ${relData.length}`);
                     console.log(`[DEBUG] First 20 bytes:`, Array.from(relData.slice(0, 20)));
 
-                    const parser = new RelFileParser(relData);
+                    // Create a copy to avoid parser modifying the original data
+                    const parser = new RelFileParser(relData.slice(0));
                     const module = parser.parse();
                     linker.addModule(module);
                     log(`  Loaded: ${relFile} (${module.name})`, 'info');
