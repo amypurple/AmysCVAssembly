@@ -60,6 +60,7 @@
             border-radius: 8px;
             transition: all 0.3s ease;
             position: relative;
+            cursor: pointer;
         }
         #drop-zone:hover {
             border-color: #60a5fa;
@@ -167,6 +168,11 @@
                 <option value="coleco" selected>ColecoVision</option>
             </select>
 
+            <!-- New File button -->
+            <button type="button" id="new-file-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" title="Create new untitled file">
+                📄 New File
+            </button>
+
             <!-- Always visible: Compile and Download -->
             <button id="compile-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed">
                 Compile
@@ -211,15 +217,22 @@
                 <h2 class="text-lg font-semibold" style="color: #60a5fa; display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 20px;">📂</span> Project Files
                 </h2>
-                <span id="file-count" style="background: #334155; padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #94a3b8;">0</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer" style="font-size: 20px; background: none; border: none; padding: 0;" title="Download entire project as ZIP">
+                        💾
+                    </button>
+                    <span id="file-count" style="background: #334155; padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #94a3b8;">0</span>
+                </div>
             </div>
             <div id="file-tree" class="flex-grow overflow-y-auto mb-4">
                 <p class="text-gray-400 text-sm">Drop files or a zip/gz archive below.</p>
             </div>
-            <div id="drop-zone" class="p-6 text-center rounded-lg">
+            <div id="drop-zone" class="p-6 text-center rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
                 <div style="font-size: 36px; margin-bottom: 8px; opacity: 0.6;">📥</div>
                 <p style="color: #94a3b8; font-weight: 500; margin-bottom: 4px;">Drag & Drop Files Here</p>
                 <p style="color: #64748b; font-size: 11px;">.asm .z80 .s .rel .lib .zip .gz</p>
+                <p style="color: #64748b; font-size: 11px; margin-top: 8px;">or tap to browse</p>
+                <input type="file" id="file-input" class="hidden" multiple accept=".asm,.z80,.s,.inc,.h,.rel,.o,.obj,.lib,.a,.bin,.rom,.col,.zip,.gz,.zx0,.pletter,.gfx,.chr,.dat,.map" title="Select files to upload">
             </div>
         </div>
 
@@ -630,6 +643,19 @@
             }
         });
 
+        // Mobile-friendly: Click to browse files
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFiles(e.target.files);
+            }
+        });
+
         async function handleFiles(files) {
             // Don't clear existing files - add to project instead
             // projectFiles = {};  // OLD: This cleared everything!
@@ -1028,6 +1054,29 @@
                     downloadProjectFile(filename);
                 };
 
+                // Add rename button
+                const renameIcon = document.createElement('span');
+                renameIcon.innerHTML = '✏️';
+                renameIcon.style.cursor = 'pointer';
+                renameIcon.style.marginLeft = '4px';
+                renameIcon.style.fontSize = '16px';
+                renameIcon.style.padding = '4px 6px';
+                renameIcon.style.borderRadius = '4px';
+                renameIcon.style.transition = 'all 0.2s ease';
+                renameIcon.title = 'Rename file';
+                renameIcon.onmouseenter = () => {
+                    renameIcon.style.background = '#f59e0b';
+                    renameIcon.style.transform = 'scale(1.2)';
+                };
+                renameIcon.onmouseleave = () => {
+                    renameIcon.style.background = 'transparent';
+                    renameIcon.style.transform = 'scale(1)';
+                };
+                renameIcon.onclick = (e) => {
+                    e.stopPropagation();
+                    renameFileIcon(filename);
+                };
+
                 // Add delete button
                 const deleteIcon = document.createElement('span');
                 deleteIcon.innerHTML = '🗑️';
@@ -1053,6 +1102,7 @@
 
                 itemContainer.appendChild(fileLabel);
                 itemContainer.appendChild(downloadIcon);
+                itemContainer.appendChild(renameIcon);
                 itemContainer.appendChild(deleteIcon);
 
                 item.className = 'file-tree-item';
@@ -1527,13 +1577,21 @@
                         continue;
                     }
                     
-                    // String literals
-                    if ((part.startsWith('"') && part.endsWith('"')) || 
+                    // Single character constants (both " and ') - convert to immediate ASCII value
+                    if ((part.startsWith('"') && part.endsWith('"') && part.length === 3) ||
                         (part.startsWith("'") && part.endsWith("'") && part.length === 3)) {
+                        const charValue = part.charCodeAt(1); // Get ASCII value
+                        operands.push(new Operand('immediate', charValue));
+                        continue;
+                    }
+
+                    // Multi-character string literals
+                    if ((part.startsWith('"') && part.endsWith('"')) ||
+                        (part.startsWith("'") && part.endsWith("'"))) {
                         operands.push(new Operand('string', part.slice(1, -1)));
                         continue;
                     }
-                    
+
                     // Everything else is a symbol
                     operands.push(new Operand('symbol', part));
                 }
@@ -1840,11 +1898,6 @@
         // Pro version: .REL file parser
         class RelFileParser {
             constructor(bytes) {
-                this.parserId = Math.random().toString(36).substr(2, 9);
-                console.log(`[DEBUG] Creating RelFileParser instance: ${this.parserId}`);
-                console.log(`[DEBUG] Parser ${this.parserId} received bytes:`, bytes.constructor.name, 'length:', bytes.length);
-                console.log(`[DEBUG] Parser ${this.parserId} first 20 bytes:`, Array.from(bytes.slice(0, 20)));
-                console.log(`[DEBUG] Parser ${this.parserId} created from:`, new Error().stack);
                 this.reader = new BitStreamReader(bytes);
                 this.module = {
                     name: '',
@@ -1888,9 +1941,9 @@
                         for (let i = 0; i < 16; i++) {
                             this.reader.readBits(8);
                         }
-                        console.log(`[DEBUG] Parser ${this.parserId}: Detected EXTENDED format .REL file (Linkstor80)`);
+                        console.log('[DEBUG] Detected EXTENDED format .REL file (Linkstor80)');
                     } else {
-                        console.log(`[DEBUG] Parser ${this.parserId}: Detected STANDARD format .REL file (LINK-80)`);
+                        console.log('[DEBUG] Detected STANDARD format .REL file (LINK-80)');
                     }
                 }
             }
@@ -3579,6 +3632,12 @@
                         parsedExpr = parsedExpr.replace(regex, this.symbolTable[symbol]);
                     }
 
+                    // Replace character constants with their ASCII values (supports both ' and ")
+                    // Matches: 'X' or "X" where X is any single character
+                    parsedExpr = parsedExpr.replace(/['"](.)['"]/g, (match, char) => {
+                        return char.charCodeAt(0).toString();
+                    });
+
                     // Pro version: Check if remaining symbol is EXTERN (after symbol table replacement)
                     // If the expression still contains letters and it's an EXTERN symbol, return 0
                     const trimmedExpr = parsedExpr.trim();
@@ -3852,10 +3911,54 @@
                     log('Editor is empty. Nothing to compile.', 'warn');
                     return;
                 }
-                mainFile = 'editor.asm';
+
+                // Generate unique untitled filename
+                let untitledCount = 1;
+                mainFile = 'untitled.asm';
+                while (projectFiles[mainFile]) {
+                    mainFile = `untitled${untitledCount}.asm`;
+                    untitledCount++;
+                }
+
                 projectFiles[mainFile] = new TextEncoder().encode(content);
+                currentFile = mainFile; // Set as current file so it appears selected
+                updateManifest(); // Update manifest with new file
+                renderFileTree(); // Update file tree to show new file
             }
-            
+
+            // BBC Micro/Amstrad syntax detection and auto-conversion
+            const mainFileContent = new TextDecoder().decode(projectFiles[mainFile]);
+            const bbcMicroPattern = /^\s*\.?org\s+&[0-9a-f]+/im;
+
+            if (bbcMicroPattern.test(mainFileContent)) {
+                const hexCount = (mainFileContent.match(/&[0-9a-f]+/gi) || []).length;
+                const userConfirm = confirm(
+                    `⚠️ BBC Micro/Amstrad CPC syntax detected!\n\n` +
+                    `Found ${hexCount} hex value(s) using & prefix (e.g., &8000).\n\n` +
+                    `This assembler uses standard Z80 syntax with $ for hex (e.g., $8000).\n\n` +
+                    `Would you like to auto-convert all & hex values to $ now?\n\n` +
+                    `Before: ORG &8000, LD A,&FF\n` +
+                    `After:  ORG $8000, LD A,$FF`
+                );
+
+                if (userConfirm) {
+                    // Convert & hex prefix to $
+                    const convertedContent = mainFileContent.replace(/&([0-9a-f]+)/gi, '$$$$1');
+                    projectFiles[mainFile] = new TextEncoder().encode(convertedContent);
+
+                    // Update editor if this is the current file
+                    if (currentFile === mainFile) {
+                        editor.setValue(convertedContent);
+                    }
+
+                    log(`✓ Converted ${hexCount} hex value(s) from & to $ prefix`, 'success');
+                    log('Your code has been updated. Continuing compilation...', 'info');
+                } else {
+                    log('Compilation cancelled. Please manually convert & to $ for hex values.', 'warn');
+                    return;
+                }
+            }
+
             const assembler = new Assembler(projectFiles);
 
             // Pro version: Set output mode from dropdown
@@ -3954,6 +4057,42 @@
         }
 
         // Function to delete a file from the project
+        // Rename file via icon button (simpler version without folder support)
+        function renameFileIcon(oldFilename) {
+            if (!projectFiles[oldFilename]) {
+                log(`File not found: ${oldFilename}`, 'error');
+                return;
+            }
+
+            const currentFolder = extractFolder(oldFilename);
+            const currentName = extractFilename(oldFilename);
+            const newName = prompt('Enter new filename:', currentName);
+
+            if (newName && newName !== currentName) {
+                const newPath = currentFolder ? `${currentFolder}/${newName}` : newName;
+
+                // Check if new filename already exists
+                if (projectFiles[newPath]) {
+                    log(`File ${newPath} already exists!`, 'error');
+                    return;
+                }
+
+                projectFiles[newPath] = projectFiles[oldFilename];
+                delete projectFiles[oldFilename];
+
+                if (projectManifest.mainFile === oldFilename) {
+                    projectManifest.mainFile = newPath;
+                }
+                if (currentFile === oldFilename) {
+                    currentFile = newPath;
+                }
+
+                updateManifest();
+                renderFileTree();
+                log(`Renamed to ${newName}`, 'success');
+            }
+        }
+
         function deleteProjectFile(filename) {
             if (!projectFiles[filename]) {
                 log(`File not found: ${filename}`, 'error');
@@ -4017,6 +4156,34 @@
             log(`  Files: ${Object.keys(projectFiles).length}`, 'info');
             log(`  Main file: ${projectManifest.mainFile || 'not set'}`, 'info');
         }
+
+        // Download project button handler (header icon)
+        document.getElementById('download-project-btn').addEventListener('click', downloadProject);
+
+        // New File button handler
+        document.getElementById('new-file-btn').addEventListener('click', () => {
+            // Generate unique untitled filename
+            let untitledCount = 1;
+            let newFileName = 'untitled.asm';
+            while (projectFiles[newFileName]) {
+                newFileName = `untitled${untitledCount}.asm`;
+                untitledCount++;
+            }
+
+            // Create empty file
+            projectFiles[newFileName] = new TextEncoder().encode('');
+
+            // Switch to new file in editor
+            currentFile = newFileName;
+            editor.setValue('');
+            editor.focus();
+
+            // Update file tree and manifest
+            updateManifest();
+            renderFileTree();
+
+            log(`Created new file: ${newFileName}`, 'success');
+        });
 
         downloadBtn.addEventListener('click', () => {
             if (!compiledBinary) return;
