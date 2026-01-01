@@ -44,6 +44,7 @@
         #drop-zone {
             border: 2px dashed #4b5563;
             transition: border-color 0.2s, background-color 0.2s;
+            cursor: pointer;
         }
         #drop-zone.drag-over {
             border-color: #4f46e5;
@@ -78,6 +79,9 @@
             <select id="target-platform" class="hidden" title="Target Platform">
                 <option value="coleco" selected>ColecoVision</option>
             </select>
+            <button type="button" id="new-file-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" title="Create new untitled file">
+                📄 New File
+            </button>
             <div id="test-buttons-container" class="flex items-center gap-2 hidden">
                 <button id="test-cv-screen" class="bg-purple-600 hover:bg-purple-700 text-white text-xs py-1 px-2 rounded transition-colors">
                     Test CV Screen
@@ -95,24 +99,28 @@
             <button id="export-symbols-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors hidden ml-2">
                 Export Symbols
             </button>
-            <button id="clean-project-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ml-2 hidden" title="Clean temporary files (.lst)">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 6h18M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Clean
-            </button>
         </div>
     </header>
 
     <main class="flex-grow flex p-4 gap-4 overflow-hidden">
         <!-- Left Panel: File Tree and Drop Zone -->
         <div class="w-1/4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <h2 class="text-lg font-semibold mb-2 border-b border-gray-700 pb-2">Project Files</h2>
+            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
+                <h2 class="text-lg font-semibold">Project Files</h2>
+                <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-xl cursor-pointer" title="Download entire project as ZIP">
+                    💾
+                </button>
+            </div>
             <div id="file-tree" class="flex-grow overflow-y-auto mb-4">
                 <p class="text-gray-400 text-sm">Drop files or a zip/gz archive below.</p>
             </div>
-            <div id="drop-zone" class="p-6 text-center rounded-lg">
-                <p class="text-gray-400">Drag & Drop Files Here</p>
+            <div id="drop-zone" class="p-6 text-center rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
+                <p class="text-gray-400">
+                    <span class="block mb-2">📁</span>
+                    <span class="font-semibold">Drag & Drop Files Here</span>
+                    <span class="block text-sm mt-2">or tap to browse</span>
+                </p>
+                <input type="file" id="file-input" class="hidden" multiple accept=".asm,.z80,.s,.inc,.h,.bin,.rom,.col,.zip,.gz" title="Select files to upload">
             </div>
         </div>
 
@@ -446,7 +454,6 @@
         const compileBtn = document.getElementById('compile-btn');
         const downloadBtn = document.getElementById('download-btn');
         const exportSymbolsBtn = document.getElementById('export-symbols-btn');
-        const cleanProjectBtn = document.getElementById('clean-project-btn');
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
 
@@ -504,9 +511,23 @@
             handleFiles(e.dataTransfer.files);
         });
 
+        // Mobile-friendly: Click to browse files
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFiles(e.target.files);
+            }
+        });
+
         async function handleFiles(files) {
-            projectFiles = {};
-            log('Processing dropped files...');
+            // Don't clear existing files - add to project instead
+            // projectFiles = {};  // OLD: This cleared everything!
+            log('Adding files to project...');
             for (const file of files) {
                 const filename = file.name;
                 if (filename.toLowerCase().endsWith('.zip')) {
@@ -597,6 +618,29 @@
                     downloadProjectFile(filename);
                 };
 
+                // Add rename button
+                const renameIcon = document.createElement('span');
+                renameIcon.innerHTML = '✏️';
+                renameIcon.style.cursor = 'pointer';
+                renameIcon.style.marginLeft = '4px';
+                renameIcon.style.fontSize = '16px';
+                renameIcon.style.padding = '4px 6px';
+                renameIcon.style.borderRadius = '4px';
+                renameIcon.style.transition = 'all 0.2s ease';
+                renameIcon.title = 'Rename file';
+                renameIcon.onmouseenter = () => {
+                    renameIcon.style.background = '#f59e0b';
+                    renameIcon.style.transform = 'scale(1.2)';
+                };
+                renameIcon.onmouseleave = () => {
+                    renameIcon.style.background = 'transparent';
+                    renameIcon.style.transform = 'scale(1)';
+                };
+                renameIcon.onclick = (e) => {
+                    e.stopPropagation();
+                    renameFile(filename);
+                };
+
                 // Add delete button
                 const deleteIcon = document.createElement('span');
                 deleteIcon.innerHTML = '🗑️';
@@ -622,6 +666,7 @@
 
                 itemContainer.appendChild(fileLabel);
                 itemContainer.appendChild(downloadIcon);
+                itemContainer.appendChild(renameIcon);
                 itemContainer.appendChild(deleteIcon);
 
                 item.className = 'file-tree-item';
@@ -681,20 +726,8 @@
 
         editor.on("change", () => {
             if (currentFile) {
-                // Only save editable text files (not .bin, .rom, .col binary files)
-                const lowerFilename = currentFile.toLowerCase();
-                const isEditable = lowerFilename.endsWith('.asm') ||
-                                  lowerFilename.endsWith('.z80') ||
-                                  lowerFilename.endsWith('.s') ||
-                                  lowerFilename.endsWith('.inc') ||
-                                  lowerFilename.endsWith('.h') ||
-                                  lowerFilename.endsWith('.txt') ||
-                                  lowerFilename.endsWith('.md');
-
-                if (isEditable) {
-                    const textEncoder = new TextEncoder();
-                    projectFiles[currentFile] = textEncoder.encode(editor.getValue());
-                }
+                const textEncoder = new TextEncoder();
+                projectFiles[currentFile] = textEncoder.encode(editor.getValue());
             }
             updateCompileButtonState();
         });
@@ -712,22 +745,20 @@
 
         // --- Parser Classes ---
         class Instruction {
-            constructor(label, mnemonic, operands, lineNumber = 0, sourceLine = '') {
-                this.label = label;
-                this.mnemonic = mnemonic;
-                this.operands = operands;
+            constructor(label, mnemonic, operands, lineNumber = 0) { 
+                this.label = label; 
+                this.mnemonic = mnemonic; 
+                this.operands = operands; 
                 this.lineNumber = lineNumber;
-                this.sourceLine = sourceLine;
             }
         }
 
         class Directive {
-            constructor(label, name, operands, lineNumber = 0, sourceLine = '') {
-                this.label = label;
-                this.name = name;
-                this.operands = operands;
+            constructor(label, name, operands, lineNumber = 0) { 
+                this.label = label; 
+                this.name = name; 
+                this.operands = operands; 
                 this.lineNumber = lineNumber;
-                this.sourceLine = sourceLine;
             }
         }
 
@@ -935,13 +966,21 @@
                         continue;
                     }
                     
-                    // String literals
-                    if ((part.startsWith('"') && part.endsWith('"')) || 
+                    // Single character constants (both " and ') - convert to immediate ASCII value
+                    if ((part.startsWith('"') && part.endsWith('"') && part.length === 3) ||
                         (part.startsWith("'") && part.endsWith("'") && part.length === 3)) {
+                        const charValue = part.charCodeAt(1); // Get ASCII value
+                        operands.push(new Operand('immediate', charValue));
+                        continue;
+                    }
+
+                    // Multi-character string literals
+                    if ((part.startsWith('"') && part.endsWith('"')) ||
+                        (part.startsWith("'") && part.endsWith("'"))) {
                         operands.push(new Operand('string', part.slice(1, -1)));
                         continue;
                     }
-                    
+
                     // Everything else is a symbol
                     operands.push(new Operand('symbol', part));
                 }
@@ -1012,9 +1051,9 @@
                     const operands = this.parse_operands(operands_str || '');
 
                     if (this.directives.includes(mnemonic_upper)) {
-                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1, line));
+                        this.tokens.push(new Directive(label, mnemonic_upper, operands, lineNum + 1));
                     } else {
-                        this.tokens.push(new Instruction(label, mnemonic_clean.toLowerCase(), operands, lineNum + 1, line));
+                        this.tokens.push(new Instruction(label, mnemonic_clean.toLowerCase(), operands, lineNum + 1));
                     }
                 }
                 return this.tokens;
@@ -1193,9 +1232,6 @@
                 };
                 this.lastNonTempSymbol = '';
                 this.numberParser = new NumberParser();
-                this.listingLines = []; // For .LST file generation
-                this.sourceLines = [];   // Store original source lines
-                this.errorCount = 0;     // Track errors for listing
             }
 
             buildImage({ mode = 'range', base = null, size = null, fill = 0xFF } = {}) {
@@ -1237,20 +1273,17 @@
                     this.currentPass = 1;
                     log(`--- Pass 1: Conditional processing and macro expansion for ${mainFile} ---`);
                     const pass1_source = await this.expandMacrosAndConditionals(mainFile);
-
-                    // Store all source lines for listing generation
-                    this.sourceLines = pass1_source.split('\n');
-
+                    
                     const lexer = new Lexer(pass1_source);
                     let tokens = lexer.tokenize();
-
+                    
                     // CPU directive is optional - default to Z80 if not specified
                     const cpuDirective = tokens.find(t => t.name === 'CPU');
                     if (cpuDirective && cpuDirective.operands[0].value.toUpperCase() !== 'Z80') {
                         throw new Error("Only Z80 CPU is supported (CPU directive found but not set to 'Z80')");
                     }
                     // If no CPU directive, we default to Z80 (zmac-compatible behavior)
-
+                    
                     const fnameDirective = tokens.find(t => t.name === 'FNAME');
                     if (fnameDirective) {
                         outputFilename = fnameDirective.operands[0].value;
@@ -1259,7 +1292,7 @@
                     this.currentPass = 2;
                     log('--- Pass 2: Building symbol table ---');
                     this.buildSymbolTable(tokens);
-
+                    
                     this.currentPass = 3;
                     log('--- Pass 3: Generating binary code ---');
                     this.generateCode(tokens);
@@ -1757,12 +1790,7 @@
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
-
-                    // Capture listing information - save start PC
-                    const startPC = this.pc;
-                    let hasError = false;
-                    let errorMsg = '';
-
+                    
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
@@ -1885,36 +1913,11 @@
                                 }
                             }
                         }
-                        this.pc = this.output.length;
+                        this.pc = this.output.length; 
                     } catch (error) {
-                        // Capture error for listing
-                        hasError = true;
-                        errorMsg = error.message;
-                        this.errorCount++;
-
                         // Add context to the error
                         const contextMsg = `Line ${this.currentLine}: ${token.mnemonic || 'directive'} ${(token.operands || []).map(o => o.value).join(', ')} - ${error.message}`;
                         throw new Error(contextMsg);
-                    } finally {
-                        // Create listing entry after processing token
-                        const bytesGenerated = this.output.slice(startPC, this.pc);
-
-                        // For ORG and other PC-changing directives, show the new PC, not the old one
-                        let displayAddress = startPC;
-                        if (token instanceof Directive && token.name === 'ORG') {
-                            displayAddress = this.pc; // Show the ORG target address
-                        }
-
-                        const listingEntry = {
-                            lineNum: token.lineNumber || 0,
-                            address: displayAddress,
-                            bytes: Array.from(bytesGenerated),
-                            sourceLine: token.sourceLine || '',
-                            label: token.label || '',
-                            hasError: hasError,
-                            errorMsg: errorMsg
-                        };
-                        this.listingLines.push(listingEntry);
                     }
                 }
             }
@@ -1929,62 +1932,6 @@
                     timestamp: new Date().toISOString()
                 };
                 return JSON.stringify(data, null, 2);
-            }
-
-            generateListingFile() {
-                let output = '';
-
-                console.log(`DEBUG: generateListingFile() called, sourceLines.length = ${this.sourceLines.length}, listingLines.length = ${this.listingLines.length}`);
-
-                // Create a map of line numbers to listing entries
-                const listingMap = {};
-                for (const entry of this.listingLines) {
-                    listingMap[entry.lineNum] = entry;
-                }
-
-                // Iterate through ALL source lines
-                for (let i = 0; i < this.sourceLines.length; i++) {
-                    const lineNum = String(i + 1).padStart(4, '0');
-                    const sourceLine = this.sourceLines[i];
-                    const entry = listingMap[i + 1];
-
-                    // Check if this is a directive that doesn't generate code (ORG, EQU, SET, etc.)
-                    const isNonCodeDirective = /^\s*\.?(org|equ|set|if|else|endif|macro|endm|include)\b/i.test(sourceLine);
-
-                    // Check if line is blank or only whitespace/comment
-                    const isBlankLine = sourceLine.trim() === '' || sourceLine.trim().startsWith(';');
-
-                    if (isBlankLine) {
-                        // Blank line: just line number and spaces
-                        output += `${lineNum}   ${' '.repeat(4)}             ${sourceLine}\n`;
-                    } else if (!entry || isNonCodeDirective || (entry && entry.bytes.length === 0)) {
-                        // Non-code directive or no bytes: show address but no bytes
-                        const address = entry ? entry.address.toString(16).toUpperCase().padStart(4, '0') : '    ';
-                        output += `${lineNum}   ${address}             ${sourceLine}\n`;
-                    } else {
-                        // Has bytes: show address and bytes
-                        const address = entry.address.toString(16).toUpperCase().padStart(4, '0');
-
-                        // Format bytes WITHOUT spaces (like TASM: "000000000000" not "00 00 00 00")
-                        const hexBytes = entry.bytes.map(b => b.toString(16).toUpperCase().padStart(2, '0')).join('');
-
-                        // Pad bytes to 12 characters (fits 6 bytes)
-                        const bytesStr = hexBytes.padEnd(12, ' ');
-
-                        output += `${lineNum}   ${address} ${bytesStr} ${sourceLine}\n`;
-                    }
-
-                    // If there's an error, add error message on next line
-                    if (entry && entry.hasError) {
-                        const errorLine = `${sourceLine.split(/\s+/)[0]} line ${lineNum}: ${entry.errorMsg}`;
-                        output += errorLine + '\n';
-                    }
-                }
-
-                // Add final summary line
-                output += `tasm: Number of errors = ${this.errorCount}\n`;
-
-                return output;
             }
 
             getOpcodeKey(instruction) {
@@ -2192,6 +2139,12 @@
                         parsedExpr = parsedExpr.replace(regex, this.symbolTable[symbol]);
                     }
 
+                    // Replace character constants with their ASCII values (supports both ' and ")
+                    // Matches: 'X' or "X" where X is any single character
+                    parsedExpr = parsedExpr.replace(/['"](.)['"]/g, (match, char) => {
+                        return char.charCodeAt(0).toString();
+                    });
+
                     // Parse numbers with different bases (for simple number values)
                     const numValue = this.numberParser.parseNumber(parsedExpr);
                     if (numValue !== null) {
@@ -2245,13 +2198,56 @@
                     log('Editor is empty. Nothing to compile.', 'warn');
                     return;
                 }
-                mainFile = 'editor.asm';
+
+                // Generate unique untitled filename
+                let untitledCount = 1;
+                mainFile = 'untitled.asm';
+                while (projectFiles[mainFile]) {
+                    mainFile = `untitled${untitledCount}.asm`;
+                    untitledCount++;
+                }
+
                 projectFiles[mainFile] = new TextEncoder().encode(content);
+                currentFile = mainFile; // Set as current file so it appears selected
+                renderFileTree(); // Update file tree to show new file
             }
 
             // Set output filename based on source file (like Pro version)
             const sourceBaseName = mainFile.replace(/\.[^/.]+$/, ''); // Remove extension
             outputFilename = `build_${sourceBaseName}.bin`;
+
+            // BBC Micro/Amstrad syntax detection and auto-conversion
+            const mainFileContent = new TextDecoder().decode(projectFiles[mainFile]);
+            const bbcMicroPattern = /^\s*\.?org\s+&[0-9a-f]+/im;
+
+            if (bbcMicroPattern.test(mainFileContent)) {
+                const hexCount = (mainFileContent.match(/&[0-9a-f]+/gi) || []).length;
+                const userConfirm = confirm(
+                    `⚠️ BBC Micro/Amstrad CPC syntax detected!\n\n` +
+                    `Found ${hexCount} hex value(s) using & prefix (e.g., &8000).\n\n` +
+                    `This assembler uses standard Z80 syntax with $ for hex (e.g., $8000).\n\n` +
+                    `Would you like to auto-convert all & hex values to $ now?\n\n` +
+                    `Before: ORG &8000, LD A,&FF\n` +
+                    `After:  ORG $8000, LD A,$FF`
+                );
+
+                if (userConfirm) {
+                    // Convert & hex prefix to $
+                    const convertedContent = mainFileContent.replace(/&([0-9a-f]+)/gi, '$$$$1');
+                    projectFiles[mainFile] = new TextEncoder().encode(convertedContent);
+
+                    // Update editor if this is the current file
+                    if (currentFile === mainFile) {
+                        editor.setValue(convertedContent);
+                    }
+
+                    log(`✓ Converted ${hexCount} hex value(s) from & to $ prefix`, 'success');
+                    log('Your code has been updated. Continuing compilation...', 'info');
+                } else {
+                    log('Compilation cancelled. Please manually convert & to $ for hex values.', 'warn');
+                    return;
+                }
+            }
 
             const assembler = new Assembler(projectFiles);
             const binary = await assembler.assemble(mainFile);
@@ -2260,23 +2256,10 @@
                 assemblerInstance = assembler;
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
-                document.getElementById('test-buttons-container').classList.remove('hidden');
-
-                // Generate .LST file
-                const lstContent = assembler.generateListingFile();
-                const lstFilename = `${sourceBaseName}.lst`;
-                projectFiles[lstFilename] = new TextEncoder().encode(lstContent);
-                log(`Generated listing file: ${lstFilename}`, 'success');
-
-                // Refresh file tree to show the new .LST file
-                renderFileTree();
-
-                // Show clean button when temporary files exist
-                cleanProjectBtn.classList.remove('hidden');
-
+                document.getElementById('test-buttons-container').classList.remove('hidden');                
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
             } else {
-                document.getElementById('test-buttons-container').classList.add('hidden');
+                document.getElementById('test-buttons-container').classList.add('hidden');                
             }
         });
 
@@ -2296,6 +2279,95 @@
             a.click();
             URL.revokeObjectURL(url);
             log(`Downloaded: ${filename}`, 'success');
+        }
+
+        // Function to download entire project as ZIP
+        async function downloadProject() {
+            const fileCount = Object.keys(projectFiles).length;
+            if (fileCount === 0) {
+                log('No files in project to download', 'warn');
+                return;
+            }
+
+            log(`Packaging ${fileCount} file(s) into project.zip...`, 'info');
+
+            // Create ZIP
+            const zip = new JSZip();
+
+            // Add all project files
+            for (const [filepath, content] of Object.entries(projectFiles)) {
+                zip.file(filepath, content);
+            }
+
+            // Generate ZIP
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+            // Download
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'project.zip';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            log(`Downloaded project.zip with ${fileCount} file(s)`, 'success');
+        }
+
+        // Download project button handler
+        document.getElementById('download-project-btn').addEventListener('click', downloadProject);
+
+        // New File button handler
+        document.getElementById('new-file-btn').addEventListener('click', () => {
+            // Generate unique untitled filename
+            let untitledCount = 1;
+            let newFileName = 'untitled.asm';
+            while (projectFiles[newFileName]) {
+                newFileName = `untitled${untitledCount}.asm`;
+                untitledCount++;
+            }
+
+            // Create empty file
+            projectFiles[newFileName] = new TextEncoder().encode('');
+
+            // Switch to new file in editor
+            currentFile = newFileName;
+            editor.setValue('');
+            editor.focus();
+
+            // Update file tree
+            renderFileTree();
+
+            log(`Created new file: ${newFileName}`, 'success');
+        });
+
+        // Function to rename a file in the project
+        function renameFile(oldFilename) {
+            if (!projectFiles[oldFilename]) {
+                log(`File not found: ${oldFilename}`, 'error');
+                return;
+            }
+
+            const newFilename = prompt('Enter new filename:', oldFilename);
+
+            if (newFilename && newFilename !== oldFilename) {
+                // Check if new filename already exists
+                if (projectFiles[newFilename]) {
+                    log(`File ${newFilename} already exists!`, 'error');
+                    return;
+                }
+
+                // Rename the file
+                projectFiles[newFilename] = projectFiles[oldFilename];
+                delete projectFiles[oldFilename];
+
+                // Update currentFile if the renamed file is currently open
+                if (currentFile === oldFilename) {
+                    currentFile = newFilename;
+                }
+
+                renderFileTree();
+                log(`Renamed ${oldFilename} to ${newFilename}`, 'success');
+            }
         }
 
         // Function to delete a file from the project
@@ -2346,49 +2418,6 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             log(`Exported symbol table to ${outputFilename.replace(/\.[^/.]+$/, '') + '_symbols.json'}.`);
-        });
-
-        // Clean Project button - removes temporary files (.lst)
-        cleanProjectBtn.addEventListener('click', () => {
-            // Define temporary file extensions to remove
-            const tempExtensions = ['.lst'];
-            let removedCount = 0;
-
-            // Find and remove temporary files
-            const filesToRemove = [];
-            for (const filename in projectFiles) {
-                const lowerFilename = filename.toLowerCase();
-                if (tempExtensions.some(ext => lowerFilename.endsWith(ext))) {
-                    filesToRemove.push(filename);
-                }
-            }
-
-            if (filesToRemove.length === 0) {
-                log('No temporary files to clean.', 'info');
-                return;
-            }
-
-            // Confirm deletion
-            if (confirm(`Remove ${filesToRemove.length} temporary file(s)?\n\n${filesToRemove.join('\n')}`)) {
-                filesToRemove.forEach(filename => {
-                    delete projectFiles[filename];
-                    removedCount++;
-                });
-
-                // Refresh the file tree display
-                renderFileTree();
-
-                // If current file was removed, clear the editor
-                if (filesToRemove.includes(currentFile)) {
-                    currentFile = null;
-                    editor.setValue('');
-                }
-
-                // Hide clean button after cleaning
-                cleanProjectBtn.classList.add('hidden');
-
-                log(`Removed ${removedCount} temporary file(s).`, 'success');
-            }
         });
 
         // Platform selection handler
