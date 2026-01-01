@@ -3943,7 +3943,7 @@
 
                 if (userConfirm) {
                     // Convert & hex prefix to $
-                    const convertedContent = mainFileContent.replace(/&([0-9a-f]+)/gi, '$$$$1');
+                    const convertedContent = mainFileContent.replace(/&([0-9a-f]+)/gi, '$$$1');
                     projectFiles[mainFile] = new TextEncoder().encode(convertedContent);
 
                     // Update editor if this is the current file
