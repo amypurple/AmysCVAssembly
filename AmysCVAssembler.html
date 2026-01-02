@@ -83,9 +83,6 @@
             <select id="target-platform" class="hidden" title="Target Platform">
                 <option value="coleco" selected>ColecoVision</option>
             </select>
-            <button type="button" id="new-file-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" title="Create new untitled file">
-                📄 New File
-            </button>
             <div id="test-buttons-container" class="flex items-center gap-2 hidden">
                 <button id="test-cv-screen" class="bg-purple-600 hover:bg-purple-700 text-white text-xs py-1 px-2 rounded transition-colors">
                     Test CV Screen
@@ -244,6 +241,7 @@
 
             if (binary.length < 2) {
                 log('Warning: Binary too small for ColecoVision header', 'warn');
+                testButtonsContainer.classList.add('hidden'); // Hide buttons if binary too small
                 return { valid: false, usesDefaultScreen: false };
             }
             
@@ -2307,7 +2305,13 @@
                 assemblerInstance = assembler;
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
-                // Test buttons are shown/hidden by validateColecoHeader() based on valid header
+
+                // Validate header again at the end to ensure test buttons are correctly shown/hidden
+                // compiledBinary was already set inside Assembler.assemble()
+                if (compiledBinary) {
+                    validateColecoHeader(compiledBinary);
+                }
+
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
             } else {
                 document.getElementById('test-buttons-container').classList.add('hidden');
@@ -2367,34 +2371,7 @@
         // Download project button handler
         document.getElementById('download-project-btn').addEventListener('click', downloadProject);
 
-        // New File button handler
-        document.getElementById('new-file-btn').addEventListener('click', () => {
-            // Generate unique untitled filename
-            let untitledCount = 1;
-            let newFileName = 'untitled.asm';
-            while (projectFiles[newFileName]) {
-                newFileName = `untitled${untitledCount}.asm`;
-                untitledCount++;
-            }
-
-            // Create empty file
-            projectFiles[newFileName] = new TextEncoder().encode('');
-
-            // Switch to new file in editor
-            currentFile = newFileName;
-            editor.setValue('');
-            editor.focus();
-
-            // Update file header display
-            document.getElementById('current-file-name').textContent = newFileName;
-
-            // Update file tree
-            renderFileTree();
-
-            log(`Created new file: ${newFileName}`, 'success');
-        });
-
-        // Close file button handler
+        // Close file button handler (× in file header)
         document.getElementById('close-file-btn').addEventListener('click', () => {
             // Generate unique untitled filename
             let untitledCount = 1;
