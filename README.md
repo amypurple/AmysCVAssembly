@@ -7,7 +7,7 @@ A powerful web-based Z80 assembler specifically designed for ColecoVision game d
 Amy's ColecoVision Assembler is a complete Z80 development environment that runs entirely in your web browser. It features:
 
 - **Multi-syntax Z80 Assembler** - Supports zmac, TASM, MACRO-80, MRAS, Intel, and Motorola assembly styles
-- **ColecoVision ROM Generation** - Creates ready-to-run .bin files for ColecoVision emulators and hardware
+- **ColecoVision ROM Generation** - Creates ready-to-run .col files for ColecoVision emulators and hardware
 - **Real-time Symbol Table** - View all labels, constants, and addresses as you assemble
 - **Authentic Boot Screen Emulation** - Preview your game's title screen with accurate TMS9918A rendering
 - **Project Management** - Handle multiple files with includes, macros, and conditional assembly
@@ -21,14 +21,14 @@ Amy's ColecoVision Assembler is a complete Z80 development environment that runs
 
 **Features:**
 - ✅ Full Z80 instruction set with all syntaxes (zmac, TASM, etc.)
-- ✅ Binary output (.bin ROM files)
+- ✅ Binary output (.col ROM files)
 - ✅ Multi-file projects with INCLUDE support
 - ✅ Macros and conditional assembly (IF/ELSE/ENDIF)
 - ✅ Symbol table export
 - ✅ ColecoVision boot screen emulation
-- ✅ File management with download/delete icons
+- ✅ File management with download/rename/delete icons
 - ✅ .asm, .z80, .s file support
-- ✅ Auto-named output files (build_filename.bin)
+- ✅ Auto-named output files (build_filename.col)
 
 **File Size:** ~140 KB
 
@@ -43,7 +43,7 @@ Amy's ColecoVision Assembler is a complete Z80 development environment that runs
 - ✅ **Smart Linking** - Automatic dead code elimination
 - ✅ **Module Inspector** - View symbols, relocations, and dependencies in .REL files
 - ✅ **Public/External Symbols** - Share functions between modules
-- ✅ **Selective Compilation** - Assemble to .REL or directly to .BIN
+- ✅ **Selective Compilation** - Assemble to .REL or directly to .COL
 - ✅ **Project Manifest** - Track main files and build configurations
 
 **File Size:** ~260 KB
@@ -81,7 +81,7 @@ loop:
 .end
 ```
 
-Save this as `hello.asm`, drag it into the assembler, compile, and you'll get `build_hello.bin` ready to run in any ColecoVision emulator!
+Save this as `hello.asm`, drag it into the assembler, compile, and you'll get `build_hello.col` ready to run in any ColecoVision emulator!
 
 ## 📖 Supported Assembly Syntaxes
 
@@ -130,14 +130,15 @@ All of these work for the value 0x702B (28715):
 
 ### Output Filenames
 Both versions now generate smart output names:
-- Input: `game.asm` → Output: `build_game.bin`
-- Input: `ddt3.z80` → Output: `build_ddt3.bin`
-- No more generic "output.bin"!
+- Input: `game.asm` → Output: `build_game.col`
+- Input: `ddt3.z80` → Output: `build_ddt3.col`
+- No more generic "output.col"!
 
 ### Project Files Panel
-Each file in your project shows two icons:
-- **💾 (Save icon)** - Download this specific file
-- **🗑️ (Trash icon)** - Remove file from project (with confirmation)
+Each file in your project shows three icons:
+- **💾 (Download icon)** - Download this specific file
+- **✏️ (Rename icon)** - Rename this file
+- **🗑️ (Delete icon)** - Remove file from project (with confirmation)
 
 ## 🔧 Pro Version: Advanced Workflow
 
@@ -177,7 +178,7 @@ start:  ld      a, 5
 1. Load both files into the project
 2. Select output mode: **LINK-80 .REL** or **Extended .REL**
 3. Compile both files (creates .REL files automatically)
-4. **Switch output mode to Binary (.bin)**
+4. **Switch output mode to Binary (.col)**
 5. Click **Link Modules** button
 6. Download your linked binary!
 
@@ -300,8 +301,8 @@ VDPWRITE    .macro  addr, value
 - ✅ Added .z80 file extension support
 - ✅ Fixed hex number parsing in expressions ($702b+10)
 - ✅ Added END directive
-- ✅ Added file download/delete icons
-- ✅ Smart output filenames (build_filename.bin)
+- ✅ Added file download/rename/delete icons
+- ✅ Smart output filenames (build_filename.col)
 - ✅ Pro: Relocatable object file support (.REL)
 - ✅ Pro: Module linking with dead code elimination
 - ✅ Pro: Library support (.LIB files)
