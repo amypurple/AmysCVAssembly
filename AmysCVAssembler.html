@@ -218,7 +218,7 @@
         let currentFile = null;
         let compiledBinary = null;
         let assemblerInstance = null;
-        let outputFilename = 'output.bin';
+        let outputFilename = 'output.col';
 
         // Target platform configurations
         const PLATFORM_CONFIGS = {
@@ -2263,7 +2263,7 @@
 
             // Set output filename based on source file (like Pro version)
             const sourceBaseName = mainFile.replace(/\.[^/.]+$/, ''); // Remove extension
-            outputFilename = `build_${sourceBaseName}.bin`;
+            outputFilename = `build_${sourceBaseName}.col`;
 
             // BBC Micro/Amstrad syntax detection and auto-conversion
             const mainFileContent = new TextDecoder().decode(projectFiles[mainFile]);
