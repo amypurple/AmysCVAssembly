@@ -171,11 +171,6 @@
                 <option value="coleco" selected>ColecoVision</option>
             </select>
 
-            <!-- New File button -->
-            <button type="button" id="new-file-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" title="Create new untitled file">
-                📄 New File
-            </button>
-
             <!-- Always visible: Compile and Download -->
             <button id="compile-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed">
                 Compile
@@ -4096,6 +4091,16 @@
                 // Show clean button when temporary files exist
                 cleanProjectBtn.classList.remove('hidden');
 
+                // Validate header and show/hide test buttons accordingly
+                // This ensures test buttons only appear for valid ColecoVision ROMs
+                if (compiledBinary && outputMode === 'binary') {
+                    validateColecoHeader(compiledBinary);
+                } else {
+                    // Hide test buttons for .REL output mode
+                    document.getElementById('test-cv-screen').classList.add('hidden');
+                    document.getElementById('test-dina-screen').classList.add('hidden');
+                }
+
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
                 updateAdaptiveMenu(); // Update adaptive menu with new available actions
             }
@@ -4223,35 +4228,7 @@
         // Download project button handler (header icon)
         document.getElementById('download-project-btn').addEventListener('click', downloadProject);
 
-        // New File button handler
-        document.getElementById('new-file-btn').addEventListener('click', () => {
-            // Generate unique untitled filename
-            let untitledCount = 1;
-            let newFileName = 'untitled.asm';
-            while (projectFiles[newFileName]) {
-                newFileName = `untitled${untitledCount}.asm`;
-                untitledCount++;
-            }
-
-            // Create empty file
-            projectFiles[newFileName] = new TextEncoder().encode('');
-
-            // Switch to new file in editor
-            currentFile = newFileName;
-            editor.setValue('');
-            editor.focus();
-
-            // Update file header display
-            document.getElementById('current-file-name').textContent = newFileName;
-
-            // Update file tree and manifest
-            updateManifest();
-            renderFileTree();
-
-            log(`Created new file: ${newFileName}`, 'success');
-        });
-
-        // Close file button handler
+        // Close file button handler (× in file header)
         document.getElementById('close-file-btn').addEventListener('click', () => {
             // Generate unique untitled filename
             let untitledCount = 1;
