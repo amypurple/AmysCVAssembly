@@ -157,7 +157,7 @@
             <div class="flex items-center gap-2">
                 <label class="text-xs text-gray-400">Output:</label>
                 <select id="output-mode" class="bg-gray-700 text-white rounded px-2 py-1 text-sm" title="Select output format">
-                    <option value="binary" selected title="ColecoVision ROM binary">Binary (.bin)</option>
+                    <option value="binary" selected title="ColecoVision ROM binary">Binary (.col)</option>
                     <option value="rel" title="Classic Microsoft LINK-80 format - 6 character symbol limit">LINK-80 .REL</option>
                     <option value="rel-extended" title="Linkstor80 extended format - unlimited symbols, UTF-8 support">Extended .REL</option>
                 </select>
@@ -327,7 +327,7 @@
         let currentFile = null;
         let compiledBinary = null;
         let assemblerInstance = null;
-        let outputFilename = 'output.bin';
+        let outputFilename = 'output.col';
 
         // Target platform configurations
         const PLATFORM_CONFIGS = {
@@ -927,7 +927,7 @@
             libraryPaths: [],
             build: {
                 relFormat: 'binary',
-                outputName: 'output.bin'
+                outputName: 'output.col'
             }
         };
 
@@ -1287,7 +1287,7 @@
                     libInfo += `  To use:\n`;
                     libInfo += `  1. Add this .LIB file to your project\n`;
                     libInfo += `  2. Compile your .asm files to .REL format\n`;
-                    libInfo += `  3. Switch output mode to Binary (.bin)\n`;
+                    libInfo += `  3. Switch output mode to Binary (.col)\n`;
                     libInfo += `  4. Click "Link Modules" to create the final binary\n`;
 
                     editor.setValue(libInfo);
@@ -4037,7 +4037,7 @@
             if (outputMode === 'rel' || outputMode === 'rel-extended') {
                 outputFilename = `build/${sourceBaseName}.rel`;
             } else {
-                outputFilename = `build/${sourceBaseName}.bin`;
+                outputFilename = `build/${sourceBaseName}.col`;
             }
 
             const binary = await assembler.assemble(mainFile);
@@ -4420,7 +4420,7 @@
                 assemblerInstance = null; // Clear assembler instance
 
                 // Set output filename for linked binary
-                outputFilename = 'linked.bin';
+                outputFilename = 'linked.col';
 
                 // Enable download
                 downloadBtn.textContent = 'Download Linked Binary';
@@ -5104,7 +5104,7 @@
                             <p class="text-sm text-gray-300 ml-11">
                                 Load your main program and the <code class="bg-gray-800 px-2 py-1 rounded">.lib</code> file.<br>
                                 Compile main to <code class="bg-gray-800 px-2 py-1 rounded">.REL</code> (using any format).<br>
-                                <strong class="text-yellow-400">Switch Output to "Binary (.bin)"</strong> for linking.<br>
+                                <strong class="text-yellow-400">Switch Output to "Binary (.col)"</strong> for linking.<br>
                                 Click <strong class="text-purple-400">"Link Modules"</strong> button.<br>
                                 Only used functions are included! 🎯
                             </p>
@@ -5121,7 +5121,7 @@
                             <h4 class="text-lg font-semibold text-yellow-400 mb-2">⚡ Simple Binary Compilation</h4>
                             <ol class="list-decimal list-inside space-y-1 text-sm text-gray-300">
                                 <li>Drop your <code class="bg-gray-800 px-1 rounded">.asm</code> file</li>
-                                <li>Select <strong>Binary (.bin)</strong> output</li>
+                                <li>Select <strong>Binary (.col)</strong> output</li>
                                 <li>Click <strong class="text-indigo-400">Compile</strong></li>
                                 <li>Click <strong class="text-green-400">Download</strong></li>
                             </ol>
@@ -5145,7 +5145,7 @@
                                 <li>Load your <code class="bg-gray-800 px-1 rounded">.lib</code> file</li>
                                 <li>Select <strong>LINK-80 .REL</strong> or <strong>Extended .REL</strong></li>
                                 <li>Compile main file to <code class="bg-gray-800 px-1 rounded">.REL</code></li>
-                                <li><strong class="text-yellow-400">IMPORTANT:</strong> Switch Output to <strong>Binary (.bin)</strong></li>
+                                <li><strong class="text-yellow-400">IMPORTANT:</strong> Switch Output to <strong>Binary (.col)</strong></li>
                                 <li>Click <strong class="text-purple-400">Link Modules</strong> button</li>
                                 <li>Download your optimized binary!</li>
                             </ol>
@@ -5229,7 +5229,7 @@
                                 The tool automatically organizes compiled outputs with zero configuration needed!
                             </p>
                             <ul class="list-disc list-inside space-y-1 text-sm text-gray-300">
-                                <li><strong class="text-blue-400">Compiled Files:</strong> .REL and .BIN files automatically saved to <code class="bg-gray-800 px-1 rounded">build/</code> folder</li>
+                                <li><strong class="text-blue-400">Compiled Files:</strong> .REL and .COL files automatically saved to <code class="bg-gray-800 px-1 rounded">build/</code> folder</li>
                                 <li><strong class="text-purple-400">Built Libraries:</strong> .LIB files automatically saved to <code class="bg-gray-800 px-1 rounded">lib/</code> folder</li>
                                 <li><strong class="text-yellow-400">Optional Download:</strong> After building libraries, you can download a copy for use in other projects</li>
                                 <li><strong class="text-cyan-400">Convention over Configuration:</strong> Works immediately without any setup</li>
@@ -5273,7 +5273,7 @@
                                 <div>📋 Include (.inc, .h)</div>
                                 <div>📦 Object (.rel, .o)</div>
                                 <div>📚 Library (.lib)</div>
-                                <div>💾 Binary (.bin, .rom)</div>
+                                <div>💾 Binary (.col, .rom)</div>
                                 <div>🗜️ Compressed (.zx0, .pletter)</div>
                                 <div>🎨 Graphics (.gfx, .chr)</div>
                                 <div>📊 Data (.dat, .map)</div>
