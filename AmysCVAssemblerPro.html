@@ -42,8 +42,11 @@
         .file-tree-item.active {
             background-color: #4f46e5;
             color: white;
+            font-weight: 600;
             border-color: #6366f1;
-            box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+            border-left: 4px solid #60a5fa;
+            padding-left: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
         #file-tree {
             background: #1e293b;
@@ -238,6 +241,16 @@
 
         <!-- Middle Panel: Code Editor -->
         <div class="w-1/2 flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden min-h-0">
+            <!-- File Header Bar -->
+            <div id="file-header" class="bg-gray-700 px-4 py-2 flex items-center justify-between border-b border-gray-600">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400 text-sm">Editing:</span>
+                    <span id="current-file-name" class="text-blue-400 font-semibold text-sm">No file open</span>
+                </div>
+                <button type="button" id="close-file-btn" class="text-gray-400 hover:text-red-400 transition-colors text-xl leading-none" title="Close file and create new untitled.asm">
+                    ×
+                </button>
+            </div>
             <div id="editor-container" class="flex-grow relative min-h-0">
                  <textarea id="code-editor"></textarea>
             </div>
@@ -285,6 +298,35 @@
             tabSize: 4,
         });
 
+        // Paste overwrite confirmation handler
+        editor.on('beforeChange', function(cm, change) {
+            if (change.origin === 'paste') {
+                const currentContent = cm.getValue();
+                const pastedContent = change.text.join('\n');
+
+                // Check if this is a significant paste that would overwrite content
+                if (currentContent.length > 50 && pastedContent.length > currentContent.length * 0.5) {
+                    const currentLines = currentContent.split('\n').length;
+                    const pastedLines = change.text.length;
+
+                    // Check if paste would replace most of the file
+                    const isLargeOverwrite = pastedLines > currentLines * 0.5 || pastedContent.length > currentContent.length * 0.8;
+
+                    if (isLargeOverwrite) {
+                        const filename = currentFile || 'this file';
+                        const confirmMsg = `You are pasting ${pastedLines} lines into ${filename} which currently has ${currentLines} lines.\n\n` +
+                                         `This will significantly modify the file content.\n\n` +
+                                         `Are you sure you want to continue?\n\n` +
+                                         `(Tip: Click the × button to create a new file instead)`;
+
+                        if (!confirm(confirmMsg)) {
+                            change.cancel();
+                        }
+                    }
+                }
+            }
+        });
+
         // --- Global State ---
         let projectFiles = {};
         let currentFile = null;
@@ -309,8 +351,13 @@
 
         // ColecoVision header validation and title screen emulation
         function validateColecoHeader(binary, showEmulation = true) {
+            const testCvBtn = document.getElementById('test-cv-screen');
+            const testDinaBtn = document.getElementById('test-dina-screen');
+
             if (binary.length < 2) {
                 log('Warning: Binary too small for ColecoVision header', 'warn');
+                testCvBtn.classList.add('hidden');
+                testDinaBtn.classList.add('hidden');
                 return { valid: false, usesDefaultScreen: false };
             }
 
@@ -332,6 +379,11 @@
 
             if (header === 0x55AA || header === 0xAA55) {
                 valid = true;
+                testCvBtn.classList.remove('hidden');
+                testDinaBtn.classList.remove('hidden');
+            } else {
+                testCvBtn.classList.add('hidden');
+                testDinaBtn.classList.add('hidden');
             }
 
             return { valid, usesDefaultScreen, header };
@@ -1120,6 +1172,17 @@
             }
         }
 
+        // Simple check: is this a text source file?
+        function isEditableTextFile(filename) {
+            const lower = filename.toLowerCase();
+            return lower.endsWith('.asm') ||
+                   lower.endsWith('.z80') ||
+                   lower.endsWith('.s') ||
+                   lower.endsWith('.inc') ||
+                   lower.endsWith('.h') ||
+                   lower.endsWith('.txt');
+        }
+
         async function openFile(filename) {
             if (!projectFiles[filename]) {
                 log(`File not found: ${filename}`, 'error');
@@ -1127,7 +1190,13 @@
             }
 
             currentFile = filename;
+
+            // Update file header display
+            document.getElementById('current-file-name').textContent = filename;
             const content = projectFiles[filename];
+
+            // Set editor to read-only by default, will be set to editable only for text files
+            editor.setOption('readOnly', true);
 
             // Pro version: Handle .LIB files specially
             if (filename.toLowerCase().endsWith('.lib')) {
@@ -1227,6 +1296,7 @@
                     libInfo += `  4. Click "Link Modules" to create the final binary\n`;
 
                     editor.setValue(libInfo);
+                    // readOnly already set at start of openFile()
 
                     // Hide download button for .LIB files (each file has its own download icon)
                     downloadBtn.classList.add('hidden');
@@ -1239,6 +1309,7 @@
                     }
                 } catch (e) {
                     editor.setValue(`--- ERROR PARSING .LIB FILE ---\n\n${e.message}\n\nNote: .LIB files should be ZIP archives containing .REL files`);
+                    // readOnly already set at start of openFile()
                     log(`Error parsing .LIB file: ${e.message}`, 'error');
                 }
             }
@@ -1282,6 +1353,7 @@
                     relInfo += `Use the "Link Modules" button when in Binary output mode.\n`;
 
                     editor.setValue(relInfo);
+                    // readOnly already set at start of openFile()
 
                     // Hide download button for .REL files (each file has its own download icon)
                     downloadBtn.classList.add('hidden');
@@ -1291,38 +1363,29 @@
                     log(`  Exports: ${module.publicSymbols.length}, Imports: ${module.externalRefs.length}`, 'info');
                 } catch (e) {
                     editor.setValue(`--- ERROR PARSING .REL FILE ---\n\n${e.message}`);
+                    // readOnly already set at start of openFile()
                     log(`Error parsing .REL file: ${e.message}`, 'error');
                 }
             } else {
-                const lowerFilename = filename.toLowerCase();
-                const isAssemblyFile = lowerFilename.endsWith('.asm') ||
-                                       lowerFilename.endsWith('.z80') ||
-                                       lowerFilename.endsWith('.s');
-
-                // Assembly files are always treated as text, even if they contain binary data (like ROM headers)
-                if (isAssemblyFile) {
+                // Simple logic: if it's a text file (.asm, .z80, .s, .inc, .h, .txt), make it editable
+                if (isEditableTextFile(filename)) {
                     try {
                         const decoder = new TextDecoder('utf-8', { fatal: false }); // Allow malformed sequences
                         const textContent = decoder.decode(content);
                         editor.setValue(textContent);
-                        log(`Opened assembly file: ${filename}`);
+                        editor.setOption('readOnly', false); // ONLY text files are editable
+                        log(`Opened text file: ${filename}`);
                     } catch (e) {
                         editor.setValue(`--- ERROR OPENING FILE: ${filename} ---\n\n${e.message}`);
+                        // readOnly already set at start of openFile()
                         log(`Error opening file: ${e.message}`, 'error');
                     }
                 } else {
-                    // Attempt to decode as text, if it fails, it's likely binary
-                    try {
-                        const decoder = new TextDecoder('utf-8', { fatal: true });
-                        const textContent = decoder.decode(content);
-                        editor.setValue(textContent);
-                        log(`Opened text file: ${filename}`);
-                    } catch (e) {
-                        editor.setValue(`--- BINARY FILE: ${filename} ---\n\nCannot display content.`);
-                        log(`Opened binary file: ${filename}`);
-                        // Hide download button for binary files (each file has its own download icon)
-                        downloadBtn.classList.add('hidden');
-                    }
+                    // Everything else is read-only (binary, compiled, etc.)
+                    editor.setValue(`--- BINARY FILE: ${filename} ---\n\nCannot display content.\n\nThis file is read-only.`);
+                    // readOnly already set at start of openFile()
+                    log(`Opened binary file: ${filename}`);
+                    downloadBtn.classList.add('hidden');
                 }
             }
 
@@ -1331,9 +1394,8 @@
 
         editor.on("change", () => {
             if (currentFile) {
-                // Only save changes for editable file types (not .REL, .LIB, .BIN, etc.)
-                const fileType = getFileType(currentFile);
-                if (fileType && FILE_TYPES[fileType] && FILE_TYPES[fileType].editable) {
+                // Simple: only save if it's a text file
+                if (isEditableTextFile(currentFile)) {
                     const textEncoder = new TextEncoder();
                     projectFiles[currentFile] = textEncoder.encode(editor.getValue());
                 }
@@ -3922,6 +3984,7 @@
 
                 projectFiles[mainFile] = new TextEncoder().encode(content);
                 currentFile = mainFile; // Set as current file so it appears selected
+                document.getElementById('current-file-name').textContent = mainFile; // Update file header
                 updateManifest(); // Update manifest with new file
                 renderFileTree(); // Update file tree to show new file
             }
@@ -4177,6 +4240,37 @@
             currentFile = newFileName;
             editor.setValue('');
             editor.focus();
+
+            // Update file header display
+            document.getElementById('current-file-name').textContent = newFileName;
+
+            // Update file tree and manifest
+            updateManifest();
+            renderFileTree();
+
+            log(`Created new file: ${newFileName}`, 'success');
+        });
+
+        // Close file button handler
+        document.getElementById('close-file-btn').addEventListener('click', () => {
+            // Generate unique untitled filename
+            let untitledCount = 1;
+            let newFileName = 'untitled.asm';
+            while (projectFiles[newFileName]) {
+                newFileName = `untitled${untitledCount}.asm`;
+                untitledCount++;
+            }
+
+            // Create empty file
+            projectFiles[newFileName] = new TextEncoder().encode('');
+
+            // Switch to new file in editor
+            currentFile = newFileName;
+            editor.setValue('');
+            editor.focus();
+
+            // Update file header display
+            document.getElementById('current-file-name').textContent = newFileName;
 
             // Update file tree and manifest
             updateManifest();
