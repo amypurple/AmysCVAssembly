@@ -2226,8 +2226,47 @@
                     throw error;
                 }
             }
+
+            generateSymbolFile() {
+                // Generate OpenMSX-compatible symbol file (.sym)
+                let output = '';
+
+                // Combine symbolTable and constantTable for complete symbol list
+                const allSymbols = {};
+
+                // Add address labels from symbolTable
+                for (const [name, value] of Object.entries(this.symbolTable)) {
+                    allSymbols[name] = value;
+                }
+
+                // Add constants from constantTable
+                for (const [name, value] of Object.entries(this.constantTable)) {
+                    allSymbols[name] = value;
+                }
+
+                // Filter out internal/temporary symbols and sort by name
+                const sortedSymbols = Object.entries(allSymbols)
+                    .filter(([name]) => {
+                        // Skip internal symbols starting with underscore
+                        if (name.startsWith('_')) return false;
+                        // Skip macro-generated internal symbols
+                        if (name.includes('@@')) return false;
+                        // Skip temporary labels (starting with digit or special chars)
+                        if (/^[\d$@]/.test(name)) return false;
+                        return true;
+                    })
+                    .sort((a, b) => a[0].localeCompare(b[0]));
+
+                // Generate symbol file in OpenMSX format: LABEL: equ HEXh
+                for (const [name, value] of sortedSymbols) {
+                    const hexAddr = value.toString(16).toUpperCase().padStart(4, '0');
+                    output += `${name}: equ ${hexAddr}h\n`;
+                }
+
+                return output;
+            }
         }
-        
+
         // --- Event Listeners ---
         compileBtn.addEventListener('click', async () => {
             consoleOutput.innerHTML = '';
@@ -2305,6 +2344,13 @@
                 assemblerInstance = assembler;
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
+
+                // Generate .SYM file (OpenMSX debugger symbols)
+                const symContent = assembler.generateSymbolFile();
+                const symFilename = `${sourceBaseName}.sym`;
+                projectFiles[symFilename] = new TextEncoder().encode(symContent);
+                log(`Generated symbol file: ${symFilename}`, 'success');
+                renderFileTree(); // Refresh file tree to show the new .SYM file
 
                 // Validate header again at the end to ensure test buttons are correctly shown/hidden
                 // compiledBinary was already set inside Assembler.assemble()
