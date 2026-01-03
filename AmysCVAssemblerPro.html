@@ -197,7 +197,7 @@
             <button id="build-lib-btn" class="hidden">Build Library (ASM→LIB)</button>
             <button id="create-lib-btn" class="hidden">Create Library from REL</button>
             <button id="export-symbols-btn" class="hidden">Export Symbols</button>
-            <button id="clean-project-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ml-2 hidden" title="Clean temporary files (.lst)">
+            <button id="clean-project-btn" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors ml-2 hidden" title="Clean temporary files (.lst, .sym)">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 6h18M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M10 11v6M14 11v6" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -3484,6 +3484,45 @@
                 return output;
             }
 
+            generateSymbolFile() {
+                // Generate OpenMSX-compatible symbol file (.sym)
+                let output = '';
+
+                // Combine symbolTable and constantTable for complete symbol list
+                const allSymbols = {};
+
+                // Add address labels from symbolTable
+                for (const [name, value] of Object.entries(this.symbolTable)) {
+                    allSymbols[name] = value;
+                }
+
+                // Add constants from constantTable
+                for (const [name, value] of Object.entries(this.constantTable)) {
+                    allSymbols[name] = value;
+                }
+
+                // Filter out internal/temporary symbols and sort by name
+                const sortedSymbols = Object.entries(allSymbols)
+                    .filter(([name]) => {
+                        // Skip internal symbols starting with underscore
+                        if (name.startsWith('_')) return false;
+                        // Skip macro-generated internal symbols
+                        if (name.includes('@@')) return false;
+                        // Skip temporary labels (starting with digit or special chars)
+                        if (/^[\d$@]/.test(name)) return false;
+                        return true;
+                    })
+                    .sort((a, b) => a[0].localeCompare(b[0]));
+
+                // Generate symbol file in OpenMSX format: LABEL: equ HEXh
+                for (const [name, value] of sortedSymbols) {
+                    const hexAddr = value.toString(16).toUpperCase().padStart(4, '0');
+                    output += `${name}: equ ${hexAddr}h\n`;
+                }
+
+                return output;
+            }
+
             getOpcodeKey(instruction) {
                 const mnemonic = instruction.mnemonic.toLowerCase();
 
@@ -4085,7 +4124,13 @@
                 projectFiles[lstFilename] = new TextEncoder().encode(lstContent);
                 log(`Generated listing file: ${lstFilename}`, 'success');
 
-                // Refresh file tree to show the new .LST file
+                // Generate .SYM file (OpenMSX debugger symbols)
+                const symContent = assembler.generateSymbolFile();
+                const symFilename = `${sourceBaseName}.sym`;
+                projectFiles[symFilename] = new TextEncoder().encode(symContent);
+                log(`Generated symbol file: ${symFilename}`, 'success');
+
+                // Refresh file tree to show the new .LST and .SYM files
                 renderFileTree();
 
                 // Show clean button when temporary files exist
@@ -4295,10 +4340,10 @@
             log(`Exported symbol table to ${outputFilename.replace(/\.[^/.]+$/, '') + '_symbols.json'}.`);
         });
 
-        // Clean Project button - removes temporary files (.lst)
+        // Clean Project button - removes temporary files (.lst, .sym)
         cleanProjectBtn.addEventListener('click', () => {
             // Define temporary file extensions to remove
-            const tempExtensions = ['.lst'];
+            const tempExtensions = ['.lst', '.sym'];
             let removedCount = 0;
 
             // Find and remove temporary files
