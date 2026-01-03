@@ -24,7 +24,8 @@ Amy's ColecoVision Assembler is a complete Z80 development environment that runs
 - ✅ Binary output (.col ROM files)
 - ✅ Multi-file projects with INCLUDE support
 - ✅ Macros and conditional assembly (IF/ELSE/ENDIF)
-- ✅ Symbol table export
+- ✅ Symbol table export (JSON and OpenMSX .sym format)
+- ✅ OpenMSX debugger symbol files (.sym) - automatic generation
 - ✅ ColecoVision boot screen emulation
 - ✅ File management with download/rename/delete icons
 - ✅ .asm, .z80, .s file support
@@ -45,6 +46,7 @@ Amy's ColecoVision Assembler is a complete Z80 development environment that runs
 - ✅ **Public/External Symbols** - Share functions between modules
 - ✅ **Selective Compilation** - Assemble to .REL or directly to .COL
 - ✅ **Project Manifest** - Track main files and build configurations
+- ✅ **Listing Files** (.lst) - Traditional assembly listings with addresses and machine code
 
 **File Size:** ~260 KB
 
@@ -81,7 +83,10 @@ loop:
 .end
 ```
 
-Save this as `hello.asm`, drag it into the assembler, compile, and you'll get `build_hello.col` ready to run in any ColecoVision emulator!
+Save this as `hello.asm`, drag it into the assembler, compile, and you'll get:
+- `build_hello.col` - Your ColecoVision ROM ready to run!
+- `hello.sym` - Symbol file for debugging (automatically generated)
+- `hello.lst` - Assembly listing with machine code (Pro version only)
 
 ## 📖 Supported Assembly Syntaxes
 
@@ -115,9 +120,16 @@ All styles work seamlessly - use what you're comfortable with!
 ## 🎯 Key Features Explained
 
 ### File Extensions
+
+**Source Files:**
 - **.asm** - Standard assembly source
-- **.z80** - TASM-style assembly (NEW! Handles binary ROM headers correctly)
-- **.s** - SDCC-style assembly
+- **.z80** - Alternative assembly source (treated same as .asm)
+- **.s** - Alternative assembly source (treated same as .asm)
+
+**Output Files:**
+- **.col** - ColecoVision ROM binary (ready to run in emulators)
+- **.sym** - OpenMSX debugger symbols (automatically generated)
+- **.lst** - Assembly listing with machine code (Pro version, auto-generated)
 - **.rel** - Relocatable object files (Pro version)
 - **.lib** - Static libraries (Pro version)
 
@@ -192,7 +204,7 @@ If you have a `.lib` file (like the ColecoVision development libraries):
 4. Click **Link Modules**
 5. Only the functions you actually call are included (dead code elimination)!
 
-## 📊 Symbol Table
+## 📊 Symbol Table & Debugging Support
 
 After compilation, switch to the **Symbols** tab to see:
 
@@ -202,7 +214,43 @@ After compilation, switch to the **Symbols** tab to see:
 - Size of data blocks
 - Easy reference for debugging
 
-Export the symbol table as JSON for use with debuggers or documentation tools.
+### Export Formats
+
+**JSON Symbol Export:**
+- Structured data with source file locations
+- Perfect for documentation tools and custom scripts
+- Contains full debugging information
+
+**OpenMSX Symbol Files (.sym):**
+- **Automatically generated** with every compilation
+- Compatible with OpenMSX debugger and similar Z80 tools
+- Standard format: `LABEL: equ HEXh`
+- Found in Project Files panel after compilation
+- Download and use with debuggers for symbolic debugging
+
+Example `.sym` file:
+```
+INIT_VDP: equ 8003h
+MAIN_LOOP: equ 8009h
+SPRITE_TABLE: equ 7000h
+START: equ 8000h
+```
+
+### Using with OpenMSX Debugger
+
+1. Compile your program in AmysCVAssembler
+2. Download the `.sym` file from Project Files
+3. Load in OpenMSX debugger:
+   ```tcl
+   sym_file load yourfile.sym
+   ```
+4. Use symbolic debugging:
+   ```tcl
+   bp set MAIN_LOOP          # Set breakpoint by label name
+   print [SPRITE_TABLE]      # Examine memory by symbol
+   ```
+
+**Pro Version Extra:** Also generates `.lst` listing files with full assembly listings including addresses and machine code bytes.
 
 ## 🎨 Boot Screen Emulation
 
@@ -303,9 +351,12 @@ VDPWRITE    .macro  addr, value
 - ✅ Added END directive
 - ✅ Added file download/rename/delete icons
 - ✅ Smart output filenames (build_filename.col)
+- ✅ **OpenMSX debugger symbol files (.sym) - automatic generation**
 - ✅ Pro: Relocatable object file support (.REL)
 - ✅ Pro: Module linking with dead code elimination
 - ✅ Pro: Library support (.LIB files)
+- ✅ Pro: Listing files (.lst) with addresses and machine code
+- ✅ Pro: Clean Project button removes temporary files (.lst, .sym)
 
 ## 🤝 Credits
 
