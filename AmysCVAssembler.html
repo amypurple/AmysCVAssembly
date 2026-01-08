@@ -1143,7 +1143,7 @@
                 this.code = code;
                 this.tokens = [];
                 this.numberParser = new NumberParser();
-                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END'];
+                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN'];
                 this.tempSymbolCounters = {
                     named: 0,
                     plus: 0,
@@ -1664,6 +1664,31 @@
                 let conditionalStack = [];
                 let currentConditionState = true;
 
+                // Pre-collect EQU constants for TIMES directive (Pass 1 needs them)
+                if (!this.constantTable) this.constantTable = {};
+                for (let i = 0; i < lines.length; i++) {
+                    const trimmed = lines[i].trim();
+                    if (!trimmed || trimmed.startsWith(';')) continue;
+
+                    // Match both formats:
+                    // LABEL EQU value
+                    // LABEL: EQU value
+                    // .equ LABEL, value (TASM style)
+                    const equMatch = trimmed.match(/^\.?equ\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*(.+)$/i) ||
+                                     trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:?\s+\.?equ\s+(.+)$/i);
+
+                    if (equMatch) {
+                        const constName = equMatch[1];
+                        const constExpr = equMatch[2].trim().replace(/;.*$/, '').trim();
+                        try {
+                            const constValue = this.evaluateExpressionSimple(constExpr);
+                            this.constantTable[constName] = constValue;
+                        } catch (e) {
+                            // Skip constants that can't be evaluated yet
+                        }
+                    }
+                }
+
                 for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
                     const line = lines[lineIdx];
                     const trimmed = line.trim();
@@ -1760,6 +1785,53 @@
                         expandedSource += `; === INCLUDED FILE: ${includeFile} ===\n`;
                         expandedSource += includedContent + '\n';
                         expandedSource += `; === END OF ${includeFile} ===\n`;
+                    } else if (mnemonic === 'times') {
+                        // TIMES directive: repeat next instruction N times (gasm80 compatible)
+                        // Parse: TIMES count instruction
+                        // Need to find where count expression ends and instruction begins
+                        const afterTimes = trimmed.substring(mnemonic.length).trim();
+
+                        // Find the instruction part (DB, DW, NOP, etc.)
+                        // Look for known directives or Z80 mnemonics
+                        const instructionMatch = afterTimes.match(/\b(DB|DW|DS|DEFB|DEFW|DEFS|LD|NOP|ADD|SUB|AND|OR|XOR|CP|INC|DEC|PUSH|POP|CALL|RET|JP|JR|DJNZ)\b/i);
+
+                        let countExpr, restOfLine;
+                        if (instructionMatch) {
+                            const instructionStart = instructionMatch.index;
+                            countExpr = afterTimes.substring(0, instructionStart).trim();
+                            restOfLine = afterTimes.substring(instructionStart).trim();
+                        } else {
+                            // No instruction found, assume everything after first token is the instruction
+                            const spaceIdx = afterTimes.indexOf(' ');
+                            if (spaceIdx > 0) {
+                                countExpr = afterTimes.substring(0, spaceIdx).trim();
+                                restOfLine = afterTimes.substring(spaceIdx).trim();
+                            } else {
+                                throw new Error(`TIMES directive at line ${lineIdx + 1}: Missing instruction after count`);
+                            }
+                        }
+
+                        let count = 0;
+                        try {
+                            count = parseInt(this.evaluateExpressionSimple(countExpr));
+                        } catch (e) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Invalid count expression '${countExpr}' - ${e.message}`);
+                        }
+
+                        if (count < 0) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Negative count (${count}) not allowed`);
+                        }
+
+                        if (count > 65536) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Count too large (${count}), maximum is 65536`);
+                        }
+
+                        // Expand the instruction 'count' times
+                        expandedSource += `; === TIMES ${count}: ${restOfLine} ===\n`;
+                        for (let t = 0; t < count; t++) {
+                            expandedSource += restOfLine + '\n';
+                        }
+                        expandedSource += `; === END TIMES ===\n`;
                     } else {
                         expandedSource += line + '\n';
                     }
@@ -1782,29 +1854,60 @@
                     // Simple condition evaluation
                     // Replace symbols with their values
                     let evalExpr = expr;
-                    
+
                     // Handle defined() function
                     evalExpr = evalExpr.replace(/defined\s*\(\s*([^)]+)\s*\)/g, (match, symbol) => {
                         return (this.constantTable[symbol] !== undefined || this.symbolTable[symbol] !== undefined) ? '1' : '0';
                     });
-                    
+
                     // Replace symbols with their constant values
                     for (const [symbol, value] of Object.entries(this.constantTable)) {
                         const regex = new RegExp(`\\b${symbol}\\b`, 'g');
                         evalExpr = evalExpr.replace(regex, value);
                     }
-                    
+
                     // Try to parse numbers
                     evalExpr = evalExpr.replace(/\$[0-9a-fA-F]+/g, (match) => {
                         return parseInt(match.substring(1), 16).toString();
                     });
-                    
+
                     // Basic expression evaluation
                     const result = new Function(`return ${evalExpr}`)();
                     return Boolean(result);
                 } catch (e) {
                     log(`Warning: Could not evaluate condition '${expr}', assuming false`, 'warn');
                     return false;
+                }
+            }
+
+            evaluateExpressionSimple(expr) {
+                // Simple expression evaluation for Pass 1 (TIMES directive, etc.)
+                // Only handles constants and basic arithmetic, not symbols/labels
+                let evalExpr = String(expr).trim();
+
+                // Replace constants from constantTable
+                for (const [symbol, value] of Object.entries(this.constantTable)) {
+                    const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                    evalExpr = evalExpr.replace(regex, value);
+                }
+
+                // Parse hex numbers ($1234, 0x1234, 1234h)
+                evalExpr = evalExpr.replace(/0x([0-9a-fA-F]+)/gi, (match, hex) => parseInt(hex, 16));
+                evalExpr = evalExpr.replace(/\$([0-9a-fA-F]+)/g, (match, hex) => parseInt(hex, 16));
+                evalExpr = evalExpr.replace(/([0-9a-fA-F]+)h\b/gi, (match, hex) => parseInt(hex, 16));
+
+                // Parse binary (%1010, 1010b)
+                evalExpr = evalExpr.replace(/%([01]+)/g, (match, bin) => parseInt(bin, 2));
+                evalExpr = evalExpr.replace(/([01]+)b\b/gi, (match, bin) => parseInt(bin, 2));
+
+                // Parse octal (@777)
+                evalExpr = evalExpr.replace(/@([0-7]+)/g, (match, oct) => parseInt(oct, 8));
+
+                // Evaluate arithmetic expression
+                try {
+                    return new Function(`return ${evalExpr}`)();
+                } catch (e) {
+                    throw new Error(`Cannot evaluate expression '${expr}': ${e.message}`);
                 }
             }
 
@@ -1968,9 +2071,24 @@
                                     this.trackFileStart(currentSourceFile, this.pc);
                                     break;
                                 case 'EQU':
-                                    if (!token.label) throw new Error("EQU directive requires a label.");
-                                    const equValue = this.evaluateExpression(token.operands[0]);
-                                    const processedEquLabel = this.processTemporarySymbol(token.label);
+                                    // Handle both formats:
+                                    // Traditional: LABEL EQU value (token.label exists, operands[0] = value)
+                                    // TASM-style: .equ LABEL, value (no token.label, operands[0] = LABEL, operands[1] = value)
+                                    let equLabel, equValueOperand;
+                                    if (token.label) {
+                                        // Traditional format: LABEL EQU value
+                                        equLabel = token.label;
+                                        equValueOperand = token.operands[0];
+                                    } else if (token.operands.length >= 2) {
+                                        // TASM format: .equ LABEL, value
+                                        equLabel = token.operands[0].value;
+                                        equValueOperand = token.operands[1];
+                                    } else {
+                                        throw new Error("EQU directive requires a label.");
+                                    }
+
+                                    const equValue = this.evaluateExpression(equValueOperand);
+                                    const processedEquLabel = this.processTemporarySymbol(equLabel);
                                     this.symbolTable[processedEquLabel] = equValue;
                                     this.constantTable[processedEquLabel] = equValue;
                                     this.symbolInfo[processedEquLabel] = {
@@ -2047,6 +2165,15 @@
                                         const sectionName = token.operands[0].value.toUpperCase();
                                         this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
                                     }
+                                    break;
+                                case 'ALIGN':
+                                    // ALIGN directive: pad to alignment boundary (gasm80 compatible)
+                                    const alignBoundary = this.evaluateExpression(token.operands[0]);
+                                    if (alignBoundary <= 0 || alignBoundary > 65536) {
+                                        throw new Error(`ALIGN directive at line ${this.currentLine}: Invalid alignment ${alignBoundary} (must be 1-65536)`);
+                                    }
+                                    const alignPadding = (alignBoundary - (this.pc % alignBoundary)) % alignBoundary;
+                                    this.pc += alignPadding;
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -2225,6 +2352,15 @@
                                         const sectionName = token.operands[0].value.toUpperCase();
                                         this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
                                     }
+                                    break;
+                                case 'ALIGN':
+                                    // ALIGN directive: output padding bytes (0xFF) to alignment boundary
+                                    const alignBoundary_pass3 = this.evaluateExpression(token.operands[0]);
+                                    const alignPadding_pass3 = (alignBoundary_pass3 - (this.pc % alignBoundary_pass3)) % alignBoundary_pass3;
+                                    for (let i = 0; i < alignPadding_pass3; i++) {
+                                        this.output.push(0xFF);
+                                    }
+                                    this.pc += alignPadding_pass3;
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -2540,6 +2676,48 @@
                         const regex = new RegExp(`${boundaryStart}${escapedSymbol}\\b`, 'gi');  // Added 'i' flag for case-insensitive
                         parsedExpr = parsedExpr.replace(regex, this.symbolTable[symbol]);
                     }
+
+                    // Handle HIGH() function - extracts high byte (bits 8-15)
+                    parsedExpr = parsedExpr.replace(/HIGH\s*\(\s*([^)]+)\s*\)/gi, (match, inner) => {
+                        try {
+                            const innerVal = new Function(`return ${inner}`)();
+                            return ((innerVal >> 8) & 0xFF).toString();
+                        } catch (e) {
+                            return match; // Keep original if evaluation fails
+                        }
+                    });
+
+                    // Handle LOW() function - extracts low byte (bits 0-7)
+                    parsedExpr = parsedExpr.replace(/LOW\s*\(\s*([^)]+)\s*\)/gi, (match, inner) => {
+                        try {
+                            const innerVal = new Function(`return ${inner}`)();
+                            return (innerVal & 0xFF).toString();
+                        } catch (e) {
+                            return match; // Keep original if evaluation fails
+                        }
+                    });
+
+                    // Handle > operator (high byte) - must come AFTER hex number parsing
+                    // Matches: >$1234 or >0x1234 or >1234 (but not in comparison expressions)
+                    parsedExpr = parsedExpr.replace(/(^|[^>])>(\d+)/g, (match, prefix, num) => {
+                        try {
+                            const val = parseInt(num, 10);
+                            return prefix + ((val >> 8) & 0xFF).toString();
+                        } catch (e) {
+                            return match;
+                        }
+                    });
+
+                    // Handle < operator (low byte) - must come AFTER hex number parsing
+                    // Matches: <$1234 or <0x1234 or <1234 (but not in comparison expressions)
+                    parsedExpr = parsedExpr.replace(/(^|[^<])<(\d+)/g, (match, prefix, num) => {
+                        try {
+                            const val = parseInt(num, 10);
+                            return prefix + (val & 0xFF).toString();
+                        } catch (e) {
+                            return match;
+                        }
+                    });
 
                     // Replace character constants with their ASCII values (supports both ' and ")
                     // Matches: 'X' or "X" where X is any single character
