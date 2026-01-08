@@ -3022,6 +3022,31 @@
                 let conditionalStack = [];
                 let currentConditionState = true;
 
+                // Pre-collect EQU constants for TIMES directive (Pass 1 needs them)
+                if (!this.constantTable) this.constantTable = {};
+                for (let i = 0; i < lines.length; i++) {
+                    const trimmed = lines[i].trim();
+                    if (!trimmed || trimmed.startsWith(';')) continue;
+
+                    // Match both formats:
+                    // LABEL EQU value
+                    // LABEL: EQU value
+                    // .equ LABEL, value (TASM style)
+                    const equMatch = trimmed.match(/^\.?equ\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,\s*(.+)$/i) ||
+                                     trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:?\s+\.?equ\s+(.+)$/i);
+
+                    if (equMatch) {
+                        const constName = equMatch[1];
+                        const constExpr = equMatch[2].trim().replace(/;.*$/, '').trim();
+                        try {
+                            const constValue = this.evaluateExpressionSimple(constExpr);
+                            this.constantTable[constName] = constValue;
+                        } catch (e) {
+                            // Skip constants that can't be evaluated yet
+                        }
+                    }
+                }
+
                 for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
                     const line = lines[lineIdx];
                     const trimmed = line.trim();
@@ -3090,18 +3115,37 @@
                         expandedSource += macroBody + '\n';
                         expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
                     } else if (mnemonic === 'times') {
-                        // TIMES directive: repeat next instruction N times
-                        // Syntax: TIMES count instruction
-                        // Example: TIMES 16 DB 0
-                        const countExpr = parts.slice(1).join(' ').split(/\s+/)[0];
-                        const restOfLine = trimmed.substring(mnemonic.length + countExpr.length).trim();
+                        // TIMES directive: repeat next instruction N times (gasm80 compatible)
+                        // Parse: TIMES count instruction
+                        // Need to find where count expression ends and instruction begins
+                        const afterTimes = trimmed.substring(mnemonic.length).trim();
+
+                        // Find the instruction part (DB, DW, NOP, etc.)
+                        // Look for known directives or Z80 mnemonics
+                        const instructionMatch = afterTimes.match(/\b(DB|DW|DS|DEFB|DEFW|DEFS|LD|NOP|ADD|SUB|AND|OR|XOR|CP|INC|DEC|PUSH|POP|CALL|RET|JP|JR|DJNZ)\b/i);
+
+                        let countExpr, restOfLine;
+                        if (instructionMatch) {
+                            const instructionStart = instructionMatch.index;
+                            countExpr = afterTimes.substring(0, instructionStart).trim();
+                            restOfLine = afterTimes.substring(instructionStart).trim();
+                        } else {
+                            // No instruction found, assume everything after first token is the instruction
+                            const spaceIdx = afterTimes.indexOf(' ');
+                            if (spaceIdx > 0) {
+                                countExpr = afterTimes.substring(0, spaceIdx).trim();
+                                restOfLine = afterTimes.substring(spaceIdx).trim();
+                            } else {
+                                throw new Error(`TIMES directive at line ${lineIdx + 1}: Missing instruction after count`);
+                            }
+                        }
 
                         // Evaluate the count expression
                         let count = 0;
                         try {
                             count = parseInt(this.evaluateExpressionSimple(countExpr));
                         } catch (e) {
-                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Invalid count expression '${countExpr}'`);
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Invalid count expression '${countExpr}' - ${e.message}`);
                         }
 
                         if (count < 0) {
@@ -3480,9 +3524,24 @@
                                     this.trackFileStart(currentSourceFile, this.pc);
                                     break;
                                 case 'EQU':
-                                    if (!token.label) throw new Error("EQU directive requires a label.");
-                                    const equValue = this.evaluateExpression(token.operands[0]);
-                                    const processedEquLabel = this.processTemporarySymbol(token.label);
+                                    // Handle both formats:
+                                    // Traditional: LABEL EQU value (token.label exists, operands[0] = value)
+                                    // TASM-style: .equ LABEL, value (no token.label, operands[0] = LABEL, operands[1] = value)
+                                    let equLabel, equValueOperand;
+                                    if (token.label) {
+                                        // Traditional format: LABEL EQU value
+                                        equLabel = token.label;
+                                        equValueOperand = token.operands[0];
+                                    } else if (token.operands.length >= 2) {
+                                        // TASM format: .equ LABEL, value
+                                        equLabel = token.operands[0].value;
+                                        equValueOperand = token.operands[1];
+                                    } else {
+                                        throw new Error("EQU directive requires a label.");
+                                    }
+
+                                    const equValue = this.evaluateExpression(equValueOperand);
+                                    const processedEquLabel = this.processTemporarySymbol(equLabel);
                                     this.symbolTable[processedEquLabel] = equValue;
                                     this.constantTable[processedEquLabel] = equValue;
                                     this.symbolInfo[processedEquLabel] = {
