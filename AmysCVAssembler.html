@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -27,32 +28,54 @@
         }
         .file-tree-item {
             cursor: pointer;
-            padding: 4px 8px;
+            padding: 6px 8px;
+            margin: 2px 0;
+            background: #334155;
             border-radius: 4px;
-            transition: background-color 0.2s;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            font-size: 13px;
         }
         .file-tree-item:hover {
-            background-color: #374151;
+            background-color: #475569;
+            border-color: #64748b;
+            transform: translateX(2px);
         }
         .file-tree-item.active {
             background-color: #4f46e5;
             color: white;
             font-weight: 600;
+            border-color: #6366f1;
             border-left: 4px solid #60a5fa;
             padding-left: 8px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        #file-tree {
+            background: #1e293b;
+            border-radius: 6px;
+            padding: 8px;
+            border: 1px solid #334155;
         }
         .cm-s-material-darker.CodeMirror {
             background-color: #1f2937;
         }
         #drop-zone {
-            border: 2px dashed #4b5563;
-            transition: border-color 0.2s, background-color 0.2s;
+            border: 2px dashed #475569;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            position: relative;
             cursor: pointer;
         }
+        #drop-zone:hover {
+            border-color: #60a5fa;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+        }
         #drop-zone.drag-over {
-            border-color: #4f46e5;
-            background-color: #374151;
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e293b 100%);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            transform: scale(1.02);
         }
         .tab-button {
             cursor: pointer;
@@ -69,6 +92,81 @@
             background-color: #374151;
             color: white;
         }
+
+        /* Burger menu styles */
+        .burger-menu {
+            display: none;
+            cursor: pointer;
+            flex-direction: column;
+            gap: 4px;
+            padding: 8px;
+        }
+        .burger-line {
+            width: 24px;
+            height: 3px;
+            background-color: white;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+        .burger-menu.open .burger-line:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        .burger-menu.open .burger-line:nth-child(2) {
+            opacity: 0;
+        }
+        .burger-menu.open .burger-line:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -6px);
+        }
+        .mobile-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background-color: #1f2937;
+            min-width: 250px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid #374151;
+            z-index: 1000;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .mobile-menu.show {
+            display: block;
+        }
+        .mobile-menu-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #374151;
+            transition: background-color 0.2s;
+        }
+        .mobile-menu-item:last-child {
+            border-bottom: none;
+        }
+        .mobile-menu-item:hover {
+            background-color: #374151;
+        }
+        .mobile-menu-item button {
+            width: 100%;
+            text-align: left;
+        }
+        .desktop-buttons {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Responsive breakpoint */
+        @media (max-width: 1024px) {
+            .burger-menu {
+                display: flex;
+            }
+            .desktop-buttons {
+                display: none;
+            }
+            header {
+                position: relative;
+            }
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -78,7 +176,9 @@
 
     <header class="bg-gray-800 p-4 shadow-md flex justify-between items-center">
         <h1 class="text-2xl font-bold text-white">AmysCVAssembler <span class="text-sm text-gray-400">(ColecoVision)</span></h1>
-        <div class="flex items-center gap-4">
+
+        <!-- Desktop buttons (hidden on mobile) -->
+        <div class="desktop-buttons">
             <!-- Platform selector hidden - hardcoded to ColecoVision -->
             <select id="target-platform" class="hidden" title="Target Platform">
                 <option value="coleco" selected>ColecoVision</option>
@@ -101,25 +201,60 @@
                 Export Symbols
             </button>
         </div>
+
+        <!-- Burger menu (shown on mobile) -->
+        <div class="burger-menu" id="burger-menu">
+            <div class="burger-line"></div>
+            <div class="burger-line"></div>
+            <div class="burger-line"></div>
+        </div>
+
+        <!-- Mobile menu dropdown -->
+        <div class="mobile-menu" id="mobile-menu">
+            <div class="mobile-menu-item">
+                <button id="compile-btn-mobile" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Compile
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="download-menu-item" style="display:none;">
+                <button id="download-btn-mobile" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Download Binary
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="export-menu-item" style="display:none;">
+                <button id="export-symbols-btn-mobile" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Export Symbols
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="test-cv-menu-item" style="display:none;">
+                <button id="test-cv-screen-mobile" class="bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded transition-colors w-full">
+                    Test CV Screen
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="test-dina-menu-item" style="display:none;">
+                <button id="test-dina-screen-mobile" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded transition-colors w-full">
+                    Test DINA Screen
+                </button>
+            </div>
+        </div>
     </header>
 
     <main class="flex-grow flex p-4 gap-4 overflow-hidden">
         <!-- Left Panel: File Tree and Drop Zone -->
-        <div class="w-1/4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-2">
-                <h2 class="text-lg font-semibold">Project Files</h2>
-                <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-xl cursor-pointer" title="Download entire project as ZIP">
+        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-1">
+                <h2 class="text-base font-semibold">Project Files</h2>
+                <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-lg cursor-pointer" title="Download entire project as ZIP">
                     💾
                 </button>
             </div>
-            <div id="file-tree" class="flex-grow overflow-y-auto mb-4">
-                <p class="text-gray-400 text-sm">Drop files or a zip/gz archive below.</p>
+            <div id="file-tree" class="flex-grow overflow-y-auto mb-3">
+                <p class="text-gray-400 text-xs">Drop files below</p>
             </div>
-            <div id="drop-zone" class="p-6 text-center rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
+            <div id="drop-zone" class="p-3 text-center rounded-lg cursor-pointer transition-colors">
                 <p class="text-gray-400">
-                    <span class="block mb-2">📁</span>
-                    <span class="font-semibold">Drag & Drop Files Here</span>
-                    <span class="block text-sm mt-2">or tap to browse</span>
+                    <span class="block mb-1 text-2xl">📁</span>
+                    <span class="text-sm font-semibold">Drag & Drop</span>
                 </p>
                 <input type="file" id="file-input" class="hidden" multiple accept=".asm,.z80,.s,.inc,.h,.bin,.rom,.col,.zip,.gz" title="Select files to upload">
             </div>
@@ -143,10 +278,10 @@
         </div>
 
         <!-- Right Panel: Console Output and Symbol Table -->
-        <div class="w-1/4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <div class="flex mb-2 border-b border-gray-700 pb-2">
-                <button id="console-tab" class="tab-button active text-lg font-semibold px-3 py-1 rounded mr-2">Console</button>
-                <button id="symbols-tab" class="tab-button text-lg font-semibold px-3 py-1 rounded">Symbols</button>
+        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div class="flex gap-1 mb-2 border-b border-gray-700 pb-1">
+                <button id="console-tab" class="tab-button active text-sm px-2 py-1 rounded" title="Console Output">📋</button>
+                <button id="symbols-tab" class="tab-button text-sm px-2 py-1 rounded" title="Symbol Table">🔤</button>
             </div>
             <pre id="console-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono"></pre>
             <pre id="symbols-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono hidden"></pre>
@@ -498,17 +633,106 @@
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
 
+        // Mobile burger menu elements
+        const burgerMenu = document.getElementById('burger-menu');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const compileBtnMobile = document.getElementById('compile-btn-mobile');
+        const downloadBtnMobile = document.getElementById('download-btn-mobile');
+        const exportSymbolsBtnMobile = document.getElementById('export-symbols-btn-mobile');
+        const testCvBtnMobile = document.getElementById('test-cv-screen-mobile');
+        const testDinaBtnMobile = document.getElementById('test-dina-screen-mobile');
+
+        // Burger menu toggle
+        burgerMenu.addEventListener('click', () => {
+            burgerMenu.classList.toggle('open');
+            mobileMenu.classList.toggle('show');
+        });
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!burgerMenu.contains(e.target) && !mobileMenu.contains(e.target)) {
+                burgerMenu.classList.remove('open');
+                mobileMenu.classList.remove('show');
+            }
+        });
+
+        // Sync mobile buttons with desktop buttons
+        compileBtnMobile.addEventListener('click', () => {
+            compileBtn.click();
+            mobileMenu.classList.remove('show');
+            burgerMenu.classList.remove('open');
+        });
+
+        downloadBtnMobile.addEventListener('click', () => {
+            downloadBtn.click();
+            mobileMenu.classList.remove('show');
+            burgerMenu.classList.remove('open');
+        });
+
+        exportSymbolsBtnMobile.addEventListener('click', () => {
+            exportSymbolsBtn.click();
+            mobileMenu.classList.remove('show');
+            burgerMenu.classList.remove('open');
+        });
+
+        // Function to sync mobile menu visibility with desktop buttons
+        function syncMobileMenuItems() {
+            const downloadMenuItem = document.getElementById('download-menu-item');
+            const exportMenuItem = document.getElementById('export-menu-item');
+            const testCvMenuItem = document.getElementById('test-cv-menu-item');
+            const testDinaMenuItem = document.getElementById('test-dina-menu-item');
+            const testButtonsContainer = document.getElementById('test-buttons-container');
+
+            downloadMenuItem.style.display = downloadBtn.classList.contains('hidden') ? 'none' : 'block';
+            exportMenuItem.style.display = exportSymbolsBtn.classList.contains('hidden') ? 'none' : 'block';
+            testCvMenuItem.style.display = testButtonsContainer.classList.contains('hidden') ? 'none' : 'block';
+            testDinaMenuItem.style.display = testButtonsContainer.classList.contains('hidden') ? 'none' : 'block';
+        }
+
         // --- Logging Utility ---
+        // Performance optimization: batch log messages and reduce DOM operations
+        let logBuffer = [];
+        let logFlushTimeout = null;
+
+        const flushLogs = () => {
+            if (logBuffer.length === 0) return;
+
+            // Create document fragment for efficient DOM insertion
+            const fragment = document.createDocumentFragment();
+            logBuffer.forEach(({message, type, time}) => {
+                const color = {
+                    info: 'text-gray-400',
+                    success: 'text-green-400',
+                    error: 'text-red-400',
+                    warn: 'text-yellow-400'
+                }[type];
+
+                const logLine = document.createElement('div');
+                logLine.innerHTML = `<span class="text-gray-600">[${time}]</span> <span class="${color}">${message}</span>`;
+                fragment.appendChild(logLine);
+            });
+
+            consoleOutput.appendChild(fragment);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            logBuffer = [];
+        };
+
         const log = (message, type = 'info') => {
             const time = new Date().toLocaleTimeString();
-            const color = {
-                info: 'text-gray-400',
-                success: 'text-green-400',
-                error: 'text-red-400',
-                warn: 'text-yellow-400'
-            }[type];
-            consoleOutput.innerHTML += `<span class="text-gray-600">[${time}]</span> <span class="${color}">${message}</span>\n`;
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            logBuffer.push({message, type, time});
+
+            // For errors, flush immediately
+            if (type === 'error') {
+                flushLogs();
+            } else {
+                // Batch other logs - flush after 50ms of inactivity or when buffer gets large
+                clearTimeout(logFlushTimeout);
+                if (logBuffer.length > 20) {
+                    flushLogs();
+                } else {
+                    logFlushTimeout = setTimeout(flushLogs, 50);
+                }
+            }
         };
 
         // --- Tab Management ---
@@ -1001,15 +1225,26 @@
                         continue;
                     }
                     
-                    // Memory operands
+                    // Memory operands or parenthesized expressions
                     if (part.startsWith('(') && part.endsWith(')')) {
                         const innerContent = part.slice(1, -1);
                         const innerNum = this.numberParser.parseNumber(innerContent);
                         if (innerNum !== null) {
                             operands.push(new Operand('memory', innerNum));
                         } else {
-                            // It's a symbol inside parentheses
-                            operands.push(new Operand('memory', innerContent));
+                            // Check if this contains bitwise operators (NOT valid for memory addressing)
+                            // Note: + and - are OK for address offsets like (symbol+1), (IX+d)
+                            // But &, |, ^, *, /, %, <<, >> indicate it's an expression to evaluate
+                            const hasBitwiseOps = /[\&\|\^\*\/\%]|<<|>>/.test(innerContent);
+
+                            if (hasBitwiseOps) {
+                                // This is a parenthesized expression like (str_buffer & 0xff), not memory access
+                                // Strip parentheses and treat as symbol expression
+                                operands.push(new Operand('symbol', innerContent));
+                            } else {
+                                // It's a symbol inside parentheses - valid indirect addressing like (HL), (IX+d), (addr+offset)
+                                operands.push(new Operand('memory', innerContent));
+                            }
                         }
                         continue;
                     }
@@ -1279,7 +1514,9 @@
                     slash: 0
                 };
                 this.lastNonTempSymbol = '';
+                this.macroCounter = 0; // For unique macro labels with @
                 this.numberParser = new NumberParser();
+                this.currentSection = 'CODE'; // Track current section: 'CODE' or 'VIRTUAL'
             }
 
             buildImage({ mode = 'range', base = null, size = null, fill = 0xFF } = {}) {
@@ -1417,8 +1654,7 @@
                 if (visited.has(filename)) throw new Error(`Circular include detected: ${filename}`);
                 visited.add(filename);
 
-                let source = this.files[filename];
-                if (!source) throw new Error(`File not found: ${filename}`);
+                let source = this.findFile(filename);
                 if (source instanceof Uint8Array) source = new TextDecoder().decode(source);
 
                 const lines = source.split('\n');
@@ -1432,10 +1668,16 @@
                     const line = lines[lineIdx];
                     const trimmed = line.trim();
                     const parts = trimmed.split(/\s+/);
-                    const mnemonic = parts.length > 0 ? parts[0].toLowerCase() : '';
+                    let mnemonic = parts.length > 0 ? parts[0].toLowerCase() : '';
+                    // Strip leading dot for TASM-style directives (.MACRO, .ENDM, etc.)
+                    if (mnemonic.startsWith('.')) {
+                        mnemonic = mnemonic.substring(1);
+                    }
 
                     // Skip lines if we're in a false conditional branch
-                    if (!currentConditionState && !['if', 'else', 'elif', 'endif'].includes(mnemonic)) {
+                    // BUT don't skip if it's a user-defined macro (check macroTable first)
+                    const isBuiltInDirective = ['if', 'else', 'elif', 'endif'].includes(mnemonic) && !this.macroTable[mnemonic];
+                    if (!currentConditionState && !isBuiltInDirective && mnemonic !== 'macro') {
                         continue;
                     }
 
@@ -1450,7 +1692,33 @@
                         }
                     } else if (mnemonic === 'macro') {
                         inMacro = true;
-                        currentMacro = { name: parts[1], params: parts.slice(2).join('').split(','), body: [] };
+                        // Normalize macro name to lowercase for case-insensitive matching
+                        const macroName = parts[1].toLowerCase();
+                        currentMacro = { name: macroName, params: parts.slice(2).join('').split(','), body: [] };
+                    } else if (this.macroTable[mnemonic]) {
+                        // Check macros BEFORE built-in directives to allow macro overrides
+                        const macro = this.macroTable[mnemonic];
+                        const args = trimmed.substring(mnemonic.length).split(',').map(s => s.trim());
+                        let macroBody = macro.body.join('\n');
+
+                        // Replace \@ with unique macro counter
+                        // Closing macros (ENDIF, ENDWHILE, NEXT, etc.) reuse the current counter
+                        // Opening macros increment to get a new unique value
+                        const closingMacros = ['endif', 'endwhile', 'next', 'endif_button', 'endswitch'];
+                        if (!closingMacros.includes(mnemonic)) {
+                            this.macroCounter++;
+                        }
+                        macroBody = macroBody.replace(/\\@/g, this.macroCounter);
+
+                        // Replace \1, \2, \3, etc. with corresponding arguments
+                        // Match backslash followed by digit(s), not followed by another digit
+                        macroBody = macroBody.replace(/\\(\d+)/g, (match, num) => {
+                            const index = parseInt(num) - 1; // \1 is args[0]
+                            return args[index] !== undefined ? args[index] : match;
+                        });
+                        expandedSource += `; === MACRO EXPANSION: ${mnemonic} ===\n`;
+                        expandedSource += macroBody + '\n';
+                        expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
                     } else if (mnemonic === 'if') {
                         const condExpr = parts.slice(1).join(' ');
                         const condResult = this.evaluateCondition(condExpr);
@@ -1492,17 +1760,6 @@
                         expandedSource += `; === INCLUDED FILE: ${includeFile} ===\n`;
                         expandedSource += includedContent + '\n';
                         expandedSource += `; === END OF ${includeFile} ===\n`;
-                    } else if (this.macroTable[mnemonic]) {
-                        const macro = this.macroTable[mnemonic];
-                        const args = trimmed.substring(mnemonic.length).split(',').map(s => s.trim());
-                        let macroBody = macro.body.join('\n');
-                        macro.params.forEach((param, index) => {
-                            const regex = new RegExp(`\\b${param.trim()}\\b`, 'g');
-                            macroBody = macroBody.replace(regex, args[index] || '');
-                        });
-                        expandedSource += `; === MACRO EXPANSION: ${mnemonic} ===\n`;
-                        expandedSource += macroBody + '\n';
-                        expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
                     } else {
                         expandedSource += line + '\n';
                     }
@@ -1597,6 +1854,41 @@
                             return candidate;
                         }
                     }
+                } else if (symbol.startsWith('.')) {
+                    // Composed local label reference
+                    // Strategy: Find the parent function (nearest CODE label before PC),
+                    // then look for parent+symbol in symbol table
+
+                    // Step 1: Find the parent function (nearest CODE label before current PC)
+                    let parentFunction = null;
+                    let parentAddress = -1;
+
+                    for (const [symName, symAddr] of Object.entries(this.symbolTable)) {
+                        // Skip dot-prefixed symbols, composed local labels (containing dots), and macro labels
+                        if (symName.startsWith('.') || symName.startsWith('__') || symName.includes('.')) continue;
+                        // Skip constants - only consider actual code labels (functions)
+                        if (this.symbolInfo[symName] && this.symbolInfo[symName].type === 'constant') continue;
+                        // Skip symbols after current PC
+                        if (symAddr > this.pc) continue;
+                        // Find the closest one before PC
+                        if (symAddr > parentAddress) {
+                            parentAddress = symAddr;
+                            parentFunction = symName;
+                        }
+                    }
+
+                    // Step 2: Look for the composed label in symbol table
+                    if (parentFunction) {
+                        const composedLabel = `${parentFunction}${symbol}`;
+                        if (this.symbolTable[composedLabel] !== undefined) {
+                            return composedLabel;
+                        } else {
+                            return composedLabel;  // Return it anyway, will be caught as undefined later if it doesn't exist
+                        }
+                    }
+
+                    // Fallback to lastNonTempSymbol if no parent function found
+                    return `${this.lastNonTempSymbol}${symbol}`;
                 }
                 return symbol;
             }
@@ -1647,7 +1939,7 @@
                                 address: this.pc,
                                 file: currentSourceFile,
                                 lineNumber: this.currentLine,
-                                type: token instanceof Directive ? 'constant' : 'label',
+                                type: (token instanceof Directive && ['EQU', 'EVAL', 'CONSTANT'].includes(token.name)) ? 'constant' : 'label',
                                 size: 0
                             };
                             
@@ -1659,8 +1951,20 @@
 
                         if (token instanceof Directive) {
                             switch (token.name) {
-                                case 'ORG': 
-                                    this.pc = this.evaluateExpression(token.operands[0]); 
+                                case 'ORG':
+                                    const oldPC_pass2 = this.pc;
+                                    const newPC_pass2 = this.evaluateExpression(token.operands[0]);
+
+                                    // Auto-detect VIRTUAL section based on ORG address
+                                    // If ORG goes backward or to RAM area, it's VIRTUAL
+                                    if (this.firstOrg === null) this.firstOrg = newPC_pass2;
+                                    if (newPC_pass2 < oldPC_pass2 || newPC_pass2 < this.firstOrg) {
+                                        this.currentSection = 'VIRTUAL';
+                                    } else if (newPC_pass2 >= this.firstOrg) {
+                                        this.currentSection = 'CODE';
+                                    }
+
+                                    this.pc = newPC_pass2;
                                     this.trackFileStart(currentSourceFile, this.pc);
                                     break;
                                 case 'EQU':
@@ -1712,8 +2016,13 @@
                                 case 'DW': case 'DEFW': case 'WORD':
                                     this.pc += token.operands.length * 2;
                                     break;
-                                case 'DS': case 'DEFS': 
-                                    this.pc += this.evaluateExpression(token.operands[0]); 
+                                case 'DS': case 'DEFS':
+                                    // DS/DEFS: Reserve space for RAM variables
+                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
+                                    if (this.currentSection !== 'VIRTUAL') {
+                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    }
+                                    this.pc += this.evaluateExpression(token.operands[0]);
                                     break;
                                 case 'INCBIN':
                                     const filename = token.operands[0].value;
@@ -1731,6 +2040,13 @@
                                     break;
                                 case 'RADIX':
                                     this.numberParser.defaultRadix = this.evaluateExpression(token.operands[0]);
+                                    break;
+                                case 'SECTION':
+                                    // Handle .section VIRTUAL / .section CODE
+                                    if (token.operands.length > 0) {
+                                        const sectionName = token.operands[0].value.toUpperCase();
+                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                    }
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -1842,15 +2158,34 @@
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
-                            this.pc = this.symbolTable[processedLabel];
-                            while(this.output.length < this.pc) this.output.push(0);
+
+                            // Don't set PC for EQU/EVAL/CONSTANT directives - they don't represent code addresses
+                            const isConstantDirective = token instanceof Directive &&
+                                                       ['EQU', 'EVAL', 'CONSTANT'].includes(token.name);
+
+                            if (!isConstantDirective) {
+                                this.pc = this.symbolTable[processedLabel];
+                                while(this.output.length < this.pc) this.output.push(0);
+                            }
                         }
 
                         if (token instanceof Directive) {
                             switch (token.name) {
                                 case 'ORG':
-                                    this.pc = this.evaluateExpression(token.operands[0]);
-                                    if (this.firstOrg === null) this.firstOrg = this.pc;   // remember first ORG
+                                    const oldPC_pass3 = this.pc;
+                                    const newPC_pass3 = this.evaluateExpression(token.operands[0]);
+
+                                    if (this.firstOrg === null) this.firstOrg = newPC_pass3;   // remember first ORG
+
+                                    // Auto-detect VIRTUAL section based on ORG address
+                                    // If ORG goes backward or to RAM area, it's VIRTUAL
+                                    if (newPC_pass3 < oldPC_pass3 || newPC_pass3 < this.firstOrg) {
+                                        this.currentSection = 'VIRTUAL';
+                                    } else if (newPC_pass3 >= this.firstOrg) {
+                                        this.currentSection = 'CODE';
+                                    }
+
+                                    this.pc = newPC_pass3;
                                     while (this.output.length < this.pc) this.output.push(0);
                                     break;
                                 case 'DB': case 'DEFB': case 'DEFM': case 'ASCII': case 'TEXT': case 'BYTE':
@@ -1870,14 +2205,26 @@
                                     });
                                     break;
                                 case 'DS': case 'DEFS':
+                                    // DS/DEFS: Reserve space for RAM variables
+                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
+                                    if (this.currentSection !== 'VIRTUAL') {
+                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    }
                                     const size = this.evaluateExpression(token.operands[0]);
-                                    const fill = token.operands.length > 1 ? this.evaluateExpression(token.operands[1]) : 0;
-                                    for (let i = 0; i < size; i++) this.output.push(fill & 0xFF);
+                                    // Advance PC to reserve RAM space, but don't output any bytes
+                                    this.pc += size;
                                     break;
                                 case 'INCBIN':
                                     const filename = token.operands[0].value;
                                     const fileData = this.findFile(filename);
                                     this.output.push(...fileData);
+                                    break;
+                                case 'SECTION':
+                                    // Handle .section VIRTUAL / .section CODE
+                                    if (token.operands.length > 0) {
+                                        const sectionName = token.operands[0].value.toUpperCase();
+                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                    }
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -2170,20 +2517,27 @@
 
                     // NOW replace $ with PC (for expressions like $ or $+5 where $ is alone)
                     parsedExpr = parsedExpr.replace(/\$/g, this.pc);
-                    parsedExpr = parsedExpr.replace(/\*/g, this.pc); // Alternative PC symbol
+                    // Don't replace * - it's the multiplication operator, not PC symbol
+                    // (If we need * as PC symbol in the future, we'll need context-aware replacement)
 
                     // Replace constants first (higher priority than symbols)
                     const sortedConstants = Object.keys(this.constantTable).sort((a, b) => b.length - a.length);
                     for (const constant of sortedConstants) {
-                        const regex = new RegExp(`\\b${constant}\\b`, 'g');
+                        // Escape special regex characters in constant name
+                        const escapedConstant = constant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`\\b${escapedConstant}\\b`, 'gi');  // Added 'i' flag for case-insensitive
                         parsedExpr = parsedExpr.replace(regex, this.constantTable[constant]);
                     }
 
-                    // Replace symbols
+                    // Replace symbols (case-insensitive for Z80 assembly compatibility)
                     const sortedSymbols = Object.keys(this.symbolTable).sort((a, b) => b.length - a.length);
 
                     for (const symbol of sortedSymbols) {
-                        const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                        // Escape special regex characters in symbol name
+                        const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        // For symbols starting with dot (local labels), don't use word boundary at start
+                        const boundaryStart = symbol.startsWith('.') ? '' : '\\b';
+                        const regex = new RegExp(`${boundaryStart}${escapedSymbol}\\b`, 'gi');  // Added 'i' flag for case-insensitive
                         parsedExpr = parsedExpr.replace(regex, this.symbolTable[symbol]);
                     }
 
@@ -2207,7 +2561,10 @@
                             throw new Error(`Undefined symbol in expression: ${originalExpr} (evaluated to: ${parsedExpr})`);
                         }
 
-                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.]/g, '');
+                        // Allow arithmetic operators: + - * / ( )
+                        // Allow bitwise operators: & | ^ ~ << >>
+                        // Allow modulo: %
+                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.\&\|\^\~\<\>\%]/g, '');
                         if (sanitizedExpr.trim() !== parsedExpr.trim()) {
                              if (this.currentPass < 3) return 0;
                              throw new Error(`Invalid characters in expression: ${originalExpr} (cleaned: ${sanitizedExpr})`);
@@ -2344,6 +2701,7 @@
                 assemblerInstance = assembler;
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
+                syncMobileMenuItems();
 
                 // Generate .SYM file (OpenMSX debugger symbols)
                 const symContent = assembler.generateSymbolFile();
@@ -2542,16 +2900,37 @@
             }
         });
 
+        testCvBtnMobile.addEventListener('click', () => {
+            if (compiledBinary) {
+                const gameInfo = parseGameTitle(compiledBinary);
+                emulateColecoBootScreen(gameInfo);
+                log('Manual ColecoVision title screen test triggered', 'info');
+                mobileMenu.classList.remove('show');
+                burgerMenu.classList.remove('open');
+            }
+        });
+
         document.getElementById('test-dina-screen').addEventListener('click', () => {
             if (compiledBinary) {
                 const gameInfo = parseGameTitle(compiledBinary);
                 emulateDinaBoot(gameInfo);
             }
             log('Manual DINA 2-in-1 title screen test triggered', 'info');
-        });        
+        });
+
+        testDinaBtnMobile.addEventListener('click', () => {
+            if (compiledBinary) {
+                const gameInfo = parseGameTitle(compiledBinary);
+                emulateDinaBoot(gameInfo);
+                log('Manual DINA 2-in-1 title screen test triggered', 'info');
+                mobileMenu.classList.remove('show');
+                burgerMenu.classList.remove('open');
+            }
+        });
 
         // Initial state
         updateCompileButtonState();
+        syncMobileMenuItems();
         log('AmysCVAssembler ready (zmac-compatible, multi-syntax Z80).', 'success');
         log('Target: ColecoVision ROM (also compatible with DINA 2-in-1)', 'info');
         log('Syntax: zmac, TASM, MACRO-80, MRAS, Intel, Motorola styles supported', 'info');
