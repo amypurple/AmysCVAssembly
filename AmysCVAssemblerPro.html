@@ -27,12 +27,13 @@
         }
         .file-tree-item {
             cursor: pointer;
-            padding: 8px 12px;
-            margin: 4px 0;
+            padding: 6px 8px;        /* au lieu de 8px 12px */
+            margin: 2px 0;           /* au lieu de 4px 0 */
             background: #334155;
-            border-radius: 6px;
+            border-radius: 4px;      /* au lieu de 6px */
             transition: all 0.2s ease;
             border: 1px solid transparent;
+            font-size: 13px;         /* AJOUTER cette ligne */
         }
         .file-tree-item:hover {
             background-color: #475569;
@@ -50,9 +51,9 @@
         }
         #file-tree {
             background: #1e293b;
-            border-radius: 8px;
-            padding: 12px;
-            border: 2px solid #334155;
+            border-radius: 6px;
+            padding: 8px;
+            border: 1px solid #334155;
         }
         .cm-s-material-darker.CodeMirror {
             background-color: #1f2937;
@@ -143,6 +144,84 @@
         .dropdown-item.disabled:hover {
             background-color: transparent;
         }
+
+        /* Burger menu styles */
+        .burger-menu {
+            display: none;
+            cursor: pointer;
+            flex-direction: column;
+            gap: 4px;
+            padding: 8px;
+        }
+        .burger-line {
+            width: 24px;
+            height: 3px;
+            background-color: white;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+        .burger-menu.open .burger-line:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        .burger-menu.open .burger-line:nth-child(2) {
+            opacity: 0;
+        }
+        .burger-menu.open .burger-line:nth-child(3) {
+            transform: rotate(-45deg) translate(7px, -6px);
+        }
+        .mobile-menu-container {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background-color: #1f2937;
+            min-width: 250px;
+            max-width: 300px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid #374151;
+            z-index: 1000;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .mobile-menu-container.show {
+            display: block;
+        }
+        .mobile-menu-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #374151;
+            transition: background-color 0.2s;
+        }
+        .mobile-menu-item:last-child {
+            border-bottom: none;
+        }
+        .mobile-menu-item:hover {
+            background-color: #374151;
+        }
+        .mobile-menu-item button,
+        .mobile-menu-item select,
+        .mobile-menu-item label {
+            width: 100%;
+            text-align: left;
+        }
+        .desktop-actions {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* Responsive breakpoint */
+        @media (max-width: 1280px) {
+            .burger-menu {
+                display: flex;
+            }
+            .desktop-actions {
+                display: none;
+            }
+            header {
+                position: relative;
+            }
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -152,7 +231,9 @@
 
     <header class="bg-gray-800 p-4 shadow-md flex justify-between items-center">
         <h1 class="text-2xl font-bold text-white">AmysCVAssemblerPro <span class="text-sm text-gray-400">(with .REL support)</span></h1>
-        <div class="flex items-center gap-4">
+
+        <!-- Desktop actions (hidden on mobile) -->
+        <div class="desktop-actions">
             <!-- Output Mode Selector -->
             <div class="flex items-center gap-2">
                 <label class="text-xs text-gray-400">Output:</label>
@@ -206,30 +287,87 @@
             <button id="test-cv-screen" class="hidden">Test CV Screen</button>
             <button id="test-dina-screen" class="hidden">Test DINA Screen</button>
         </div>
+
+        <!-- Burger menu (shown on mobile) -->
+        <div class="burger-menu" id="burger-menu-pro">
+            <div class="burger-line"></div>
+            <div class="burger-line"></div>
+            <div class="burger-line"></div>
+        </div>
+
+        <!-- Mobile menu dropdown -->
+        <div class="mobile-menu-container" id="mobile-menu-pro">
+            <div class="mobile-menu-item">
+                <label class="text-xs text-gray-400 block mb-2">Output:</label>
+                <select id="output-mode-mobile" class="bg-gray-700 text-white rounded px-2 py-1 text-sm w-full">
+                    <option value="binary">Binary (.col)</option>
+                    <option value="rel">LINK-80 .REL</option>
+                    <option value="rel-extended">Extended .REL</option>
+                </select>
+            </div>
+            <div class="mobile-menu-item">
+                <button id="compile-btn-mobile-pro" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full disabled:bg-gray-500">
+                    Compile
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="download-menu-item-pro" style="display:none;">
+                <button id="download-btn-mobile-pro" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Download Binary
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="link-menu-item-pro" style="display:none;">
+                <button id="link-btn-mobile-pro" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Link Modules
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="build-lib-menu-item-pro" style="display:none;">
+                <button id="build-lib-btn-mobile-pro" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Build Library (ASM→LIB)
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="create-lib-menu-item-pro" style="display:none;">
+                <button id="create-lib-btn-mobile-pro" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Create Library from REL
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="export-menu-item-pro" style="display:none;">
+                <button id="export-symbols-btn-mobile-pro" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Export Symbols
+                </button>
+            </div>
+            <div class="mobile-menu-item" id="clean-menu-item-pro" style="display:none;">
+                <button id="clean-project-btn-mobile-pro" class="bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    Clean Project
+                </button>
+            </div>
+            <div class="mobile-menu-item">
+                <button id="help-btn-mobile-pro" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors w-full">
+                    ❓ Help
+                </button>
+            </div>
+        </div>
     </header>
 
     <main class="flex-grow flex p-4 gap-4 overflow-hidden">
         <!-- Left Panel: File Tree and Drop Zone -->
-        <div class="w-1/4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 2px solid #475569;">
-                <h2 class="text-lg font-semibold" style="color: #60a5fa; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">📂</span> Project Files
-                </h2>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors cursor-pointer" style="font-size: 20px; background: none; border: none; padding: 0;" title="Download entire project as ZIP">
+        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">  <!-- p-3 au lieu de p-4 -->
+            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-1">  <!-- pb-1 au lieu de pb-2 -->
+                <h2 class="text-base font-semibold">Project Files</h2>  <!-- text-base au lieu de text-lg -->
+                <div class="flex items-center gap-2">
+                    <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-lg cursor-pointer" title="Download entire project as ZIP">  <!-- text-lg au lieu de text-xl -->
                         💾
                     </button>
-                    <span id="file-count" style="background: #334155; padding: 4px 10px; border-radius: 12px; font-size: 12px; color: #94a3b8;">0</span>
+                    <span id="file-count" class="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-400">0</span>  <!-- py-0.5 au lieu de py-1 -->
                 </div>
             </div>
-            <div id="file-tree" class="flex-grow overflow-y-auto mb-4">
-                <p class="text-gray-400 text-sm">Drop files or a zip/gz archive below.</p>
+            <div id="file-tree" class="flex-grow overflow-y-auto mb-3">  <!-- mb-3 au lieu de mb-4 -->
+                <p class="text-gray-400 text-xs">Drop files below</p>  <!-- text-xs au lieu de text-sm, texte raccourci -->
             </div>
-            <div id="drop-zone" class="p-6 text-center rounded-lg cursor-pointer hover:bg-gray-700 transition-colors">
-                <div style="font-size: 36px; margin-bottom: 8px; opacity: 0.6;">📥</div>
-                <p style="color: #94a3b8; font-weight: 500; margin-bottom: 4px;">Drag & Drop Files Here</p>
-                <p style="color: #64748b; font-size: 11px;">.asm .z80 .s .rel .lib .zip .gz</p>
-                <p style="color: #64748b; font-size: 11px; margin-top: 8px;">or tap to browse</p>
+            <div id="drop-zone" class="p-3 text-center rounded-lg cursor-pointer transition-colors">  <!-- p-3 au lieu de p-6 -->
+                <p class="text-gray-400">
+                    <span class="block mb-1 text-2xl">📁</span>  <!-- mb-1 au lieu de mb-2, text-2xl au lieu de text-3xl -->
+                    <span class="text-sm font-semibold">Drag & Drop</span>  <!-- text-sm ajouté, texte raccourci -->
+                </p>
                 <input type="file" id="file-input" class="hidden" multiple accept=".asm,.z80,.s,.inc,.h,.rel,.o,.obj,.lib,.a,.bin,.rom,.col,.zip,.gz,.zx0,.pletter,.gfx,.chr,.dat,.map" title="Select files to upload">
             </div>
         </div>
@@ -252,10 +390,10 @@
         </div>
 
         <!-- Right Panel: Console Output and Symbol Table -->
-        <div class="w-1/4 flex flex-col bg-gray-800 p-4 rounded-lg shadow-lg">
-            <div class="flex mb-2 border-b border-gray-700 pb-2">
-                <button id="console-tab" class="tab-button active text-lg font-semibold px-3 py-1 rounded mr-2">Console</button>
-                <button id="symbols-tab" class="tab-button text-lg font-semibold px-3 py-1 rounded">Symbols</button>
+        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div class="flex gap-1 mb-2 border-b border-gray-700 pb-1">
+                <button id="console-tab" class="tab-button active text-sm px-2 py-1 rounded" title="Console Output">📋</button>
+                <button id="symbols-tab" class="tab-button text-sm px-2 py-1 rounded" title="Symbol Table">🔤</button>
             </div>
             <pre id="console-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono"></pre>
             <pre id="symbols-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono hidden"></pre>
@@ -612,17 +750,161 @@
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
 
+        // Mobile burger menu elements
+        const burgerMenuPro = document.getElementById('burger-menu-pro');
+        const mobileMenuPro = document.getElementById('mobile-menu-pro');
+        const outputModeMobile = document.getElementById('output-mode-mobile');
+        const compileBtnMobilePro = document.getElementById('compile-btn-mobile-pro');
+        const downloadBtnMobilePro = document.getElementById('download-btn-mobile-pro');
+        const linkBtnMobilePro = document.getElementById('link-btn-mobile-pro');
+        const buildLibBtnMobilePro = document.getElementById('build-lib-btn-mobile-pro');
+        const createLibBtnMobilePro = document.getElementById('create-lib-btn-mobile-pro');
+        const exportSymbolsBtnMobilePro = document.getElementById('export-symbols-btn-mobile-pro');
+        const cleanProjectBtnMobilePro = document.getElementById('clean-project-btn-mobile-pro');
+        const helpBtnMobilePro = document.getElementById('help-btn-mobile-pro');
+
+        // Burger menu toggle
+        burgerMenuPro.addEventListener('click', () => {
+            burgerMenuPro.classList.toggle('open');
+            mobileMenuPro.classList.toggle('show');
+        });
+
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!burgerMenuPro.contains(e.target) && !mobileMenuPro.contains(e.target)) {
+                burgerMenuPro.classList.remove('open');
+                mobileMenuPro.classList.remove('show');
+            }
+        });
+
+        // Sync output mode between desktop and mobile
+        const outputModeDesktop = document.getElementById('output-mode');
+        outputModeDesktop.addEventListener('change', () => {
+            outputModeMobile.value = outputModeDesktop.value;
+        });
+        outputModeMobile.addEventListener('change', () => {
+            outputModeDesktop.value = outputModeMobile.value;
+            outputModeDesktop.dispatchEvent(new Event('change'));
+        });
+
+        // Sync mobile buttons with desktop buttons
+        compileBtnMobilePro.addEventListener('click', () => {
+            compileBtn.click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        downloadBtnMobilePro.addEventListener('click', () => {
+            downloadBtn.click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        linkBtnMobilePro.addEventListener('click', () => {
+            document.getElementById('link-btn').click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        buildLibBtnMobilePro.addEventListener('click', () => {
+            document.getElementById('build-lib-btn').click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        createLibBtnMobilePro.addEventListener('click', () => {
+            document.getElementById('create-lib-btn').click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        exportSymbolsBtnMobilePro.addEventListener('click', () => {
+            exportSymbolsBtn.click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        cleanProjectBtnMobilePro.addEventListener('click', () => {
+            cleanProjectBtn.click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        helpBtnMobilePro.addEventListener('click', () => {
+            document.getElementById('help-btn').click();
+            mobileMenuPro.classList.remove('show');
+            burgerMenuPro.classList.remove('open');
+        });
+
+        // Function to sync mobile menu visibility with desktop buttons
+        function syncMobileMenuItemsPro() {
+            document.getElementById('download-menu-item-pro').style.display =
+                downloadBtn.classList.contains('hidden') ? 'none' : 'block';
+
+            document.getElementById('link-menu-item-pro').style.display =
+                document.getElementById('link-btn').classList.contains('hidden') ? 'none' : 'block';
+
+            document.getElementById('build-lib-menu-item-pro').style.display =
+                document.getElementById('build-lib-btn').classList.contains('hidden') ? 'none' : 'block';
+
+            document.getElementById('create-lib-menu-item-pro').style.display =
+                document.getElementById('create-lib-btn').classList.contains('hidden') ? 'none' : 'block';
+
+            document.getElementById('export-menu-item-pro').style.display =
+                exportSymbolsBtn.classList.contains('hidden') ? 'none' : 'block';
+
+            document.getElementById('clean-menu-item-pro').style.display =
+                cleanProjectBtn.classList.contains('hidden') ? 'none' : 'block';
+        }
+
         // --- Logging Utility ---
-        const log = (message, type = 'info') => {
-            const time = new Date().toLocaleTimeString();
-            const color = {
-                info: 'text-gray-400',
-                success: 'text-green-400',
-                error: 'text-red-400',
-                warn: 'text-yellow-400'
-            }[type];
-            consoleOutput.innerHTML += `<span class="text-gray-600">[${time}]</span> <span class="${color}">${message}</span>\n`;
+        // Performance optimization: batch log messages and reduce DOM operations
+        let logBuffer = [];
+        let logFlushTimeout = null;
+
+        const flushLogs = () => {
+            if (logBuffer.length === 0) return;
+
+            // Create document fragment for efficient DOM insertion
+            const fragment = document.createDocumentFragment();
+            logBuffer.forEach(({message, type, time}) => {
+                const color = {
+                    info: 'text-gray-400',
+                    success: 'text-green-400',
+                    error: 'text-red-400',
+                    warn: 'text-yellow-400',
+                    debug: 'text-blue-400'
+                }[type];
+
+                const logLine = document.createElement('div');
+                logLine.innerHTML = `<span class="text-gray-600">[${time}]</span> <span class="${color}">${message}</span>`;
+                fragment.appendChild(logLine);
+            });
+
+            consoleOutput.appendChild(fragment);
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            logBuffer = [];
+        };
+
+        const log = (message, type = 'info') => {
+            // Skip debug logs to improve performance (uncomment next line to enable debug logs)
+            // if (type === 'debug') return;
+
+            const time = new Date().toLocaleTimeString();
+            logBuffer.push({message, type, time});
+
+            // For errors, flush immediately
+            if (type === 'error') {
+                flushLogs();
+            } else {
+                // Batch other logs - flush after 50ms of inactivity or when buffer gets large
+                clearTimeout(logFlushTimeout);
+                if (logBuffer.length > 20) {
+                    flushLogs();
+                } else {
+                    logFlushTimeout = setTimeout(flushLogs, 50);
+                }
+            }
         };
 
         // --- Tab Management ---
@@ -1539,7 +1821,7 @@
                 this.code = code;
                 this.tokens = [];
                 this.numberParser = new NumberParser();
-                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE'];
+                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE', 'TIMES', 'ALIGN'];
                 this.tempSymbolCounters = {
                     named: 0,
                     plus: 0,
@@ -1621,15 +1903,26 @@
                         continue;
                     }
                     
-                    // Memory operands
+                    // Memory operands or parenthesized expressions
                     if (part.startsWith('(') && part.endsWith(')')) {
                         const innerContent = part.slice(1, -1);
                         const innerNum = this.numberParser.parseNumber(innerContent);
                         if (innerNum !== null) {
                             operands.push(new Operand('memory', innerNum));
                         } else {
-                            // It's a symbol inside parentheses
-                            operands.push(new Operand('memory', innerContent));
+                            // Check if this contains bitwise operators (NOT valid for memory addressing)
+                            // Note: + and - are OK for address offsets like (symbol+1), (IX+d)
+                            // But &, |, ^, *, /, %, <<, >> indicate it's an expression to evaluate
+                            const hasBitwiseOps = /[\&\|\^\*\/\%]|<<|>>/.test(innerContent);
+
+                            if (hasBitwiseOps) {
+                                // This is a parenthesized expression like (str_buffer & 0xff), not memory access
+                                // Strip parentheses and treat as symbol expression
+                                operands.push(new Operand('symbol', innerContent));
+                            } else {
+                                // It's a symbol inside parentheses - valid indirect addressing like (HL), (IX+d), (addr+offset)
+                                operands.push(new Operand('memory', innerContent));
+                            }
                         }
                         continue;
                     }
@@ -2539,7 +2832,9 @@
                     slash: 0
                 };
                 this.lastNonTempSymbol = '';
+                this.macroCounter = 0; // For unique macro labels with \@
                 this.numberParser = new NumberParser();
+                this.currentSection = 'CODE'; // Track current section: 'CODE' or 'VIRTUAL'
                 this.listingLines = []; // For .LST file generation
                 this.sourceLines = [];   // Store original source lines
                 this.errorCount = 0;     // Track errors for listing
@@ -2568,9 +2863,10 @@
                     return src;
                 }
 
-                // Derive a sensible window if the caller didn't specify one.
+                // CRITICAL: this.output is now relative to firstOrg, not absolute addresses
+                // So src[0] corresponds to address firstOrg, src[n] corresponds to address firstOrg+n
                 const first = (this.firstOrg !== null) ? this.firstOrg : 0;
-                const last  = src.length; // because you pad this.output to absolute PC
+                const last  = first + src.length; // Last address in output buffer
 
                 if (mode !== 'range') { // 'auto' or anything else → derive from ORGs
                     if (base == null) base = first;
@@ -2584,10 +2880,11 @@
                 const out = new Uint8Array(size).fill(fill & 0xFF);
 
                 // Copy the intersection of [base, base+size) from src into out[0..size)
-                const start = Math.max(0, base);
-                const end   = Math.min(src.length, base + size);
-                if (end > start) {
-                    out.set(src.subarray(start, end), 0);
+                // Convert absolute addresses to buffer positions
+                const srcStart = Math.max(0, base - first); // Position in src buffer
+                const srcEnd   = Math.min(src.length, (base + size) - first);
+                if (srcEnd > srcStart) {
+                    out.set(src.subarray(srcStart, srcEnd), 0);
                 }
                 return out;
             }
@@ -2715,8 +3012,7 @@
                 if (visited.has(filename)) throw new Error(`Circular include detected: ${filename}`);
                 visited.add(filename);
 
-                let source = this.files[filename];
-                if (!source) throw new Error(`File not found: ${filename}`);
+                let source = this.findFile(filename);
                 if (source instanceof Uint8Array) source = new TextDecoder().decode(source);
 
                 const lines = source.split('\n');
@@ -2730,10 +3026,16 @@
                     const line = lines[lineIdx];
                     const trimmed = line.trim();
                     const parts = trimmed.split(/\s+/);
-                    const mnemonic = parts.length > 0 ? parts[0].toLowerCase() : '';
+                    let mnemonic = parts.length > 0 ? parts[0].toLowerCase() : '';
+                    // Strip leading dot for TASM-style directives (.MACRO, .ENDM, etc.)
+                    if (mnemonic.startsWith('.')) {
+                        mnemonic = mnemonic.substring(1);
+                    }
 
                     // Skip lines if we're in a false conditional branch
-                    if (!currentConditionState && !['if', 'else', 'elif', 'endif'].includes(mnemonic)) {
+                    // BUT don't skip if it's a user-defined macro (check macroTable first)
+                    const isBuiltInDirective = ['if', 'else', 'elif', 'endif'].includes(mnemonic) && !this.macroTable[mnemonic];
+                    if (!currentConditionState && !isBuiltInDirective && mnemonic !== 'macro') {
                         continue;
                     }
 
@@ -2748,7 +3050,74 @@
                         }
                     } else if (mnemonic === 'macro') {
                         inMacro = true;
-                        currentMacro = { name: parts[1], params: parts.slice(2).join('').split(','), body: [] };
+                        // Normalize macro name to lowercase for case-insensitive matching
+                        const macroName = parts[1].toLowerCase();
+                        currentMacro = { name: macroName, params: parts.slice(2).join('').split(','), body: [] };
+                    } else if (this.macroTable[mnemonic]) {
+                        // Check macros BEFORE built-in directives to allow macro overrides
+                        const macro = this.macroTable[mnemonic];
+                        const args = trimmed.substring(mnemonic.length).split(',').map(s => s.trim());
+                        let macroBody = macro.body.join('\n');
+
+                        // Replace \@ with unique macro counter
+                        // Closing macros (ENDIF, ENDWHILE, NEXT, etc.) reuse the current counter
+                        // Opening macros increment to get a new unique value
+                        // Macros that shouldn't increment the counter:
+                        // - Closing macros (endif, endwhile, next, endif_button)
+                        // - Variable/utility macros that don't use \@ (var_byte, load_var, inc_var, etc.)
+                        const nonIncrementingMacros = [
+                            'endif', 'endwhile', 'next', 'endif_button', 'endswitch',
+                            'var_byte', 'var_word', 'var_array',
+                            'inc_var', 'dec_var', 'load_var', 'store_var', 'copy_var',
+                            'vdp_write_reg', 'vram_set_write', 'vram_set_read', 'vram_write_byte', 'vram_read_byte',
+                            'sprite_set_pos', 'sprite_set_pattern', 'sprite_hide',
+                            'psg_write', 'psg_mute_all',
+                            'fill_ram', 'copy_ram',
+                            'wait_vblank', 'disable_interrupts', 'enable_interrupts', 'nop_delay'
+                        ];
+                        if (!nonIncrementingMacros.includes(mnemonic)) {
+                            this.macroCounter++;
+                        }
+                        macroBody = macroBody.replace(/\\@/g, this.macroCounter);
+
+                        // Replace \1, \2, \3, etc. with corresponding arguments
+                        // Match backslash followed by digit(s), not followed by another digit
+                        macroBody = macroBody.replace(/\\(\d+)/g, (match, num) => {
+                            const index = parseInt(num) - 1; // \1 is args[0]
+                            return args[index] !== undefined ? args[index] : match;
+                        });
+                        expandedSource += `; === MACRO EXPANSION: ${mnemonic} ===\n`;
+                        expandedSource += macroBody + '\n';
+                        expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
+                    } else if (mnemonic === 'times') {
+                        // TIMES directive: repeat next instruction N times
+                        // Syntax: TIMES count instruction
+                        // Example: TIMES 16 DB 0
+                        const countExpr = parts.slice(1).join(' ').split(/\s+/)[0];
+                        const restOfLine = trimmed.substring(mnemonic.length + countExpr.length).trim();
+
+                        // Evaluate the count expression
+                        let count = 0;
+                        try {
+                            count = parseInt(this.evaluateExpressionSimple(countExpr));
+                        } catch (e) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Invalid count expression '${countExpr}'`);
+                        }
+
+                        if (count < 0) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Negative count (${count}) not allowed`);
+                        }
+
+                        if (count > 65536) {
+                            throw new Error(`TIMES directive at line ${lineIdx + 1}: Count too large (${count}), maximum is 65536`);
+                        }
+
+                        // Expand the instruction 'count' times
+                        expandedSource += `; === TIMES ${count}: ${restOfLine} ===\n`;
+                        for (let t = 0; t < count; t++) {
+                            expandedSource += restOfLine + '\n';
+                        }
+                        expandedSource += `; === END TIMES ===\n`;
                     } else if (mnemonic === 'if') {
                         const condExpr = parts.slice(1).join(' ');
                         const condResult = this.evaluateCondition(condExpr);
@@ -2790,17 +3159,6 @@
                         expandedSource += `; === INCLUDED FILE: ${includeFile} ===\n`;
                         expandedSource += includedContent + '\n';
                         expandedSource += `; === END OF ${includeFile} ===\n`;
-                    } else if (this.macroTable[mnemonic]) {
-                        const macro = this.macroTable[mnemonic];
-                        const args = trimmed.substring(mnemonic.length).split(',').map(s => s.trim());
-                        let macroBody = macro.body.join('\n');
-                        macro.params.forEach((param, index) => {
-                            const regex = new RegExp(`\\b${param.trim()}\\b`, 'g');
-                            macroBody = macroBody.replace(regex, args[index] || '');
-                        });
-                        expandedSource += `; === MACRO EXPANSION: ${mnemonic} ===\n`;
-                        expandedSource += macroBody + '\n';
-                        expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
                     } else {
                         expandedSource += line + '\n';
                     }
@@ -2823,29 +3181,62 @@
                     // Simple condition evaluation
                     // Replace symbols with their values
                     let evalExpr = expr;
-                    
+
                     // Handle defined() function
                     evalExpr = evalExpr.replace(/defined\s*\(\s*([^)]+)\s*\)/g, (match, symbol) => {
                         return (this.constantTable[symbol] !== undefined || this.symbolTable[symbol] !== undefined) ? '1' : '0';
                     });
-                    
+
                     // Replace symbols with their constant values
                     for (const [symbol, value] of Object.entries(this.constantTable)) {
                         const regex = new RegExp(`\\b${symbol}\\b`, 'g');
                         evalExpr = evalExpr.replace(regex, value);
                     }
-                    
+
                     // Try to parse numbers
                     evalExpr = evalExpr.replace(/\$[0-9a-fA-F]+/g, (match) => {
                         return parseInt(match.substring(1), 16).toString();
                     });
-                    
+
                     // Basic expression evaluation
                     const result = new Function(`return ${evalExpr}`)();
                     return Boolean(result);
                 } catch (e) {
                     log(`Warning: Could not evaluate condition '${expr}', assuming false`, 'warn');
                     return false;
+                }
+            }
+
+            evaluateExpressionSimple(expr) {
+                // Simple expression evaluator for Pass 1 (before full symbol table exists)
+                // Only handles constants and basic math - no labels
+                try {
+                    let evalExpr = expr.trim();
+
+                    // Replace hex numbers ($FF or 0xFF format)
+                    evalExpr = evalExpr.replace(/\$([0-9a-fA-F]+)/g, (match, hex) => {
+                        return '0x' + hex;
+                    });
+
+                    // Replace binary numbers (0b format or %format)
+                    evalExpr = evalExpr.replace(/0b([01]+)/gi, (match, bin) => {
+                        return parseInt(bin, 2).toString();
+                    });
+                    evalExpr = evalExpr.replace(/%([01]+)/g, (match, bin) => {
+                        return parseInt(bin, 2).toString();
+                    });
+
+                    // Replace constants from constantTable
+                    for (const [symbol, value] of Object.entries(this.constantTable)) {
+                        const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                        evalExpr = evalExpr.replace(regex, value);
+                    }
+
+                    // Evaluate the expression
+                    const result = new Function(`return ${evalExpr}`)();
+                    return result;
+                } catch (e) {
+                    throw new Error(`Cannot evaluate expression '${expr}': ${e.message}`);
                 }
             }
 
@@ -2895,6 +3286,54 @@
                             return candidate;
                         }
                     }
+                } else if (symbol.startsWith('.')) {
+                    // Composed local label reference
+                    // CRITICAL: Use lastNonTempSymbol as the primary parent function
+                    // This is more reliable than searching by PC, especially when PC jumps around due to ORG directives
+
+                    // Step 1: Try using lastNonTempSymbol first
+                    if (this.lastNonTempSymbol) {
+                        const composedLabel = `${this.lastNonTempSymbol}${symbol}`;
+                        if (this.symbolTable[composedLabel] !== undefined) {
+                            log(`DEBUG: Resolved local label '${symbol}' to '${composedLabel}' (parent: ${this.lastNonTempSymbol}) at PC ${this.pc}`, 'debug');
+                            return composedLabel;
+                        } else {
+                            log(`DEBUG: Composed label '${composedLabel}' not found in symbol table, returning as-is at PC ${this.pc}`, 'debug');
+                            return composedLabel;  // Return it anyway, will be caught as undefined later if it doesn't exist
+                        }
+                    }
+
+                    // Step 2: Fallback - Find the parent function (nearest CODE label before current PC)
+                    let parentFunction = null;
+                    let parentAddress = -1;
+
+                    for (const [symName, symAddr] of Object.entries(this.symbolTable)) {
+                        // Skip dot-prefixed symbols and composed local labels (containing dots)
+                        if (symName.startsWith('.') || symName.startsWith('__') || symName.includes('.')) continue;
+
+                        // CRITICAL: Only consider CODE labels, not data labels or constants
+                        const symInfo = this.symbolInfo[symName];
+                        if (!symInfo || symInfo.category !== 'code') continue;
+
+                        // Skip symbols after current PC
+                        if (symAddr > this.pc) continue;
+
+                        // Find the closest one before PC
+                        if (symAddr > parentAddress) {
+                            parentAddress = symAddr;
+                            parentFunction = symName;
+                        }
+                    }
+
+                    if (parentFunction) {
+                        const composedLabel = `${parentFunction}${symbol}`;
+                        log(`DEBUG: Fallback resolved local label '${symbol}' to '${composedLabel}' (parent by PC search: ${parentFunction}) at PC ${this.pc}`, 'debug');
+                        return composedLabel;
+                    }
+
+                    // Last resort: return as-is
+                    log(`DEBUG: Could not resolve local label '${symbol}', returning as-is at PC ${this.pc}`, 'debug');
+                    return symbol;
                 }
                 return symbol;
             }
@@ -2927,38 +3366,117 @@
                 this.constantTable = {};
                 this.symbolInfo = {};
                 let currentSourceFile = 'main';
-                
-                for (const token of tokens) {
+
+                // Track ROM output position separately from PC for virtual (RAM) sections
+                let romPC = 0;          // Where we are in actual ROM output
+                let inVirtualSection = false;  // True when in RAM section
+
+                for (let i = 0; i < tokens.length; i++) {
+                    const token = tokens[i];
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
-                    
+
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
-                            
+
+                            // DEBUG: Log macro labels
+                            if (processedLabel.startsWith('__') && this.currentLine >= 900 && this.currentLine <= 920) {
+                                log(`DEBUG MACRO LABEL: Line ${this.currentLine}, label '${processedLabel}', PC ${this.pc}`, 'debug');
+                            }
+
                             if (this.symbolTable[processedLabel] !== undefined) {
                                log(`Warning: Redefining label '${processedLabel}' at line ${this.currentLine}`, 'warn');
                             }
-                            
+
+                            // Determine symbol category: constant, data, or code
+                            let symbolType = 'label';
+                            let symbolCategory = 'code'; // default to code
+
+                            if (token instanceof Directive && ['EQU', 'EVAL', 'CONSTANT'].includes(token.name)) {
+                                symbolType = 'constant';
+                                symbolCategory = 'constant';
+                            } else if (token instanceof Directive && ['DB', 'DW', 'DS', 'DEFB', 'DEFW', 'DEFS'].includes(token.name)) {
+                                symbolType = 'label';
+                                symbolCategory = 'data';
+                            } else if (token instanceof Instruction) {
+                                symbolType = 'label';
+                                symbolCategory = 'code';
+                            } else {
+                                // Label on its own line - peek at next token to determine category
+                                const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
+                                if (nextToken instanceof Directive && ['DB', 'DW', 'DS', 'DEFB', 'DEFW', 'DEFS'].includes(nextToken.name)) {
+                                    symbolCategory = 'data';
+                                } else {
+                                    symbolCategory = 'code';
+                                }
+                            }
+
+                            // CRITICAL: If we encounter a CODE label while in virtual section, implicitly return to ROM
+                            if (inVirtualSection && symbolCategory === 'code') {
+                                const oldPC = this.pc;
+                                inVirtualSection = false;
+                                this.pc = (this.firstOrg || 0) + romPC;
+                                if (this.currentLine <= 900) {
+                                    log(`DEBUG SECTION: Line ${this.currentLine}, CODE label '${processedLabel}' - returning to ROM, PC ${oldPC} -> ${this.pc}, romPC=${romPC}`, 'debug');
+                                }
+                            }
+
                             this.symbolTable[processedLabel] = this.pc;
+
                             this.symbolInfo[processedLabel] = {
                                 address: this.pc,
                                 file: currentSourceFile,
                                 lineNumber: this.currentLine,
-                                type: token instanceof Directive ? 'constant' : 'label',
+                                type: symbolType,
+                                category: symbolCategory,  // 'code', 'data', or 'constant'
                                 size: 0
                             };
-                            
+
                             // Track last non-temporary symbol for composed temporary symbols
+                            // CRITICAL: Only track CODE labels, not DATA labels or constants
                             if (!token.label.startsWith('.') && !['+', '-', '/'].includes(token.label)) {
-                                this.lastNonTempSymbol = processedLabel;
+                                if (symbolCategory === 'code') {
+                                    const oldLast = this.lastNonTempSymbol;
+                                    this.lastNonTempSymbol = processedLabel;
+                                    if (this.currentLine >= 800 && this.currentLine <= 880) {
+                                        log(`DEBUG LAST: Line ${this.currentLine}, updated lastNonTempSymbol: '${oldLast}' -> '${processedLabel}' (category: ${symbolCategory})`, 'debug');
+                                    }
+                                } else if (this.currentLine >= 800 && this.currentLine <= 880) {
+                                    log(`DEBUG LAST: Line ${this.currentLine}, NOT updating lastNonTempSymbol for '${processedLabel}' (category: ${symbolCategory})`, 'debug');
+                                }
                             }
                         }
 
                         if (token instanceof Directive) {
                             switch (token.name) {
-                                case 'ORG': 
-                                    this.pc = this.evaluateExpression(token.operands[0]); 
+                                case 'ORG':
+                                    const newPC = this.evaluateExpression(token.operands[0]);
+                                    const oldInVirtual = inVirtualSection;
+
+                                    // Detect virtual (RAM) section: backward ORG or ORG to address < romPC
+                                    if (newPC < this.pc || (this.firstOrg !== null && newPC < this.firstOrg + romPC)) {
+                                        // Entering virtual section (RAM variables)
+                                        inVirtualSection = true;
+                                        this.currentSection = 'VIRTUAL';  // Sync currentSection with auto-detection
+                                        if (!oldInVirtual && this.currentLine <= 900) {
+                                            log(`DEBUG SECTION: Line ${this.currentLine}, entering VIRTUAL section, PC ${this.pc} -> ${newPC}, romPC stays at ${romPC}`, 'debug');
+                                        }
+                                    } else if (inVirtualSection && newPC >= this.firstOrg) {
+                                        // Leaving virtual section, returning to ROM
+                                        inVirtualSection = false;
+                                        this.currentSection = 'CODE';  // Sync currentSection with auto-detection
+                                        romPC = newPC - (this.firstOrg || 0);
+                                        if (this.currentLine <= 900) {
+                                            log(`DEBUG SECTION: Line ${this.currentLine}, leaving VIRTUAL section, PC ${this.pc} -> ${newPC}, romPC updated to ${romPC}`, 'debug');
+                                        }
+                                    }
+
+                                    if (!inVirtualSection) {
+                                        romPC = newPC - (this.firstOrg || 0);
+                                    }
+
+                                    this.pc = newPC;
                                     this.trackFileStart(currentSourceFile, this.pc);
                                     break;
                                 case 'EQU':
@@ -3006,12 +3524,27 @@
                                     const dbSize = token.operands.reduce((sum, op) =>
                                         sum + ((op.type === 'string') ? op.value.length : 1), 0);
                                     this.pc += dbSize;
+                                    if (!inVirtualSection) romPC += dbSize;
                                     break;
                                 case 'DW': case 'DEFW': case 'WORD':
-                                    this.pc += token.operands.length * 2;
+                                    const dwSize = token.operands.length * 2;
+                                    this.pc += dwSize;
+                                    if (!inVirtualSection) romPC += dwSize;
                                     break;
-                                case 'DS': case 'DEFS': 
-                                    this.pc += this.evaluateExpression(token.operands[0]); 
+                                case 'DS': case 'DEFS':
+                                    // DS/DEFS: Reserve space for RAM variables
+                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
+                                    if (this.currentSection !== 'VIRTUAL') {
+                                        log(`ERROR: .DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM)`, 'error');
+                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    }
+                                    const dsSize = this.evaluateExpression(token.operands[0]);
+                                    if (dsSize > 65536) {
+                                        log(`ERROR: DS directive at line ${this.currentLine} (Pass 2) has suspiciously large size: ${dsSize} (operand: ${token.operands[0].value})`, 'error');
+                                        throw new Error(`DS size too large: ${dsSize} (max 65536). Check operand: ${token.operands[0].value}`);
+                                    }
+                                    this.pc += dsSize;
+                                    if (!inVirtualSection) romPC += dsSize;
                                     break;
                                 case 'INCBIN':
                                     const filename = token.operands[0].value;
@@ -3029,6 +3562,26 @@
                                     break;
                                 case 'RADIX':
                                     this.numberParser.defaultRadix = this.evaluateExpression(token.operands[0]);
+                                    break;
+                                case 'SECTION':
+                                    // Handle .section VIRTUAL / .section CODE
+                                    if (token.operands.length > 0) {
+                                        const sectionName = token.operands[0].value.toUpperCase();
+                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                    }
+                                    break;
+                                case 'ALIGN':
+                                    // ALIGN directive: pad PC to next alignment boundary
+                                    // Syntax: ALIGN boundary
+                                    // Example: ALIGN 128  (align to next 128-byte boundary)
+                                    const alignBoundary = this.evaluateExpression(token.operands[0]);
+                                    if (alignBoundary <= 0 || alignBoundary > 65536) {
+                                        throw new Error(`ALIGN directive at line ${this.currentLine}: Invalid alignment ${alignBoundary} (must be 1-65536)`);
+                                    }
+                                    // Calculate padding needed
+                                    const alignPadding = (alignBoundary - (this.pc % alignBoundary)) % alignBoundary;
+                                    this.pc += alignPadding;
+                                    if (!inVirtualSection) romPC += alignPadding;
                                     break;
 
                                 // Pro version: Symbol visibility directives
@@ -3106,25 +3659,35 @@
                                     break;
                             }
                         } else if (token instanceof Instruction) {
+                            // CRITICAL: Instructions should not appear in virtual sections
+                            // If we encounter one, implicitly return to ROM
+                            if (inVirtualSection) {
+                                inVirtualSection = false;
+                                this.pc = (this.firstOrg || 0) + romPC;
+                            }
+
                             const key = this.getOpcodeKey(token);
                             const opcode = Z80_OPCODES[key];
+                            let instrSize = 0;
                             if (opcode) {
-                                this.pc += opcode.length;
-                                if (key.includes('imm8') || key.includes('rel8')) this.pc += 1;
-                                if (key.includes('imm16')) this.pc += 2;
-                                if (key.includes('offset')) this.pc += 1; // IX/IY offset
+                                instrSize = opcode.length;
+                                if (key.includes('imm8') || key.includes('rel8')) instrSize += 1;
+                                if (key.includes('imm16')) instrSize += 2;
+                                if (key.includes('offset')) instrSize += 1; // IX/IY offset
+                                this.pc += instrSize;
                             } else {
                                 // Fallback size estimation for unknown opcodes
-                                let size = 1;
-                                if (token.mnemonic.startsWith('ld')) size++;
-                                if (token.operands.some(op => 
+                                instrSize = 1;
+                                if (token.mnemonic.startsWith('ld')) instrSize++;
+                                if (token.operands.some(op =>
                                     op.type === 'immediate' && op.value > 255 ||
                                     op.type === 'symbol' ||
                                     (op.type === 'memory' && (typeof op.value === 'number' || (typeof op.value === 'string' && !['bc','de','hl','sp','c'].includes(op.value.toLowerCase()))))
-                                )) size += 1;
-                                this.pc += size;
-                                log(`Using estimated size ${size} for opcode: ${token.mnemonic} ${token.operands.map(o=>o.value).join(',')} at line ${this.currentLine}`, 'warn');
+                                )) instrSize += 1;
+                                this.pc += instrSize;
+                                log(`Using estimated size ${instrSize} for opcode: ${token.mnemonic} ${token.operands.map(o=>o.value).join(',')} at line ${this.currentLine}`, 'warn');
                             }
+                            romPC += instrSize;
                         }
                     } catch (error) {
                         // Add context to the error
@@ -3207,38 +3770,117 @@
             generateCode(tokens) {
                 this.pc = 0;
                 this.output = [];
+                this.lastNonTempSymbol = '';  // Reset for Pass 3
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
 
                     // Track state for listing generation
-                    const startPC = this.pc;
+                    let startPC = this.pc;  // Will be updated after label processing
+                    const startOutputLen = this.output.length;  // Track output buffer position
                     let hasError = false;
                     let errorMsg = '';
 
                     try {
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
-                            this.pc = this.symbolTable[processedLabel];
 
-                            // Pro version: In .REL mode, don't fill with zeros - linker handles placement
-                            if (this.outputMode !== 'rel') {
-                                while(this.output.length < this.pc) this.output.push(0);
+                            // Don't set PC for EQU/EVAL/CONSTANT directives - they don't represent code addresses
+                            const isConstantDirective = token instanceof Directive &&
+                                                       ['EQU', 'EVAL', 'CONSTANT'].includes(token.name);
+
+                            if (!isConstantDirective) {
+                                const oldPC = this.pc;
+                                const targetPC = this.symbolTable[processedLabel];
+
+                                // DEBUG: Log PC changes for labels
+                                if (this.currentLine <= 900) {
+                                    log(`DEBUG PC: Line ${this.currentLine}, label '${processedLabel}': PC ${oldPC} -> ${targetPC} (${targetPC > oldPC ? '+' : ''}${targetPC - oldPC})`, 'debug');
+                                }
+
+                                this.pc = targetPC;
+
+                                if (this.pc - oldPC > 1000) {
+                                    log(`DEBUG: Large PC jump at label '${processedLabel}' line ${this.currentLine}: ${oldPC} -> ${this.pc} (+${this.pc - oldPC} bytes)`, 'debug');
+                                }
+
+                                if (this.pc > 100000) {
+                                    log(`ERROR: Label '${processedLabel}' at line ${this.currentLine} has suspiciously large address: ${this.pc}`, 'error');
+                                    throw new Error(`Label address too large: ${processedLabel} = ${this.pc}. Check symbol table.`);
+                                }
+
+                                // Pro version: In .REL mode, don't fill with zeros - linker handles placement
+                                // CRITICAL: Output buffer is relative to firstOrg
+                                // Only fill forward to match ROM output. RAM sections don't add to output.
+                                if (this.outputMode !== 'rel' && this.firstOrg !== null) {
+                                    const targetOutputPos = this.pc - this.firstOrg;
+                                    // Only fill if PC is ahead of current output AND we're in ROM space (PC >= firstOrg)
+                                    if (this.pc >= this.firstOrg && targetOutputPos > this.output.length) {
+                                        while(this.output.length < targetOutputPos) this.output.push(0);
+                                    }
+                                }
+                            }
+
+                            // Update startPC after label processing for correct PC increment calculation
+                            startPC = this.pc;
+
+                            // CRITICAL: Update lastNonTempSymbol in Pass 3 the same way as Pass 2
+                            // This ensures that subsequent .loop labels compose with the correct parent
+                            if (!token.label.startsWith('.') && !['+', '-', '/'].includes(token.label)) {
+                                const symInfo = this.symbolInfo[processedLabel];
+                                if (symInfo && symInfo.category === 'code') {
+                                    const oldLast = this.lastNonTempSymbol;
+                                    this.lastNonTempSymbol = processedLabel;
+                                    if (this.currentLine >= 800 && this.currentLine <= 880) {
+                                        log(`DEBUG LAST P3: Line ${this.currentLine}, updated lastNonTempSymbol: '${oldLast}' -> '${processedLabel}' (category: ${symInfo.category})`, 'debug');
+                                    }
+                                } else if (this.currentLine >= 800 && this.currentLine <= 880) {
+                                    log(`DEBUG LAST P3: Line ${this.currentLine}, NOT updating for '${processedLabel}' (category: ${symInfo ? symInfo.category : 'no info'})`, 'debug');
+                                }
                             }
                         }
 
                         if (token instanceof Directive) {
                             switch (token.name) {
                                 case 'ORG':
-                                    this.pc = this.evaluateExpression(token.operands[0]);
-                                    if (this.firstOrg === null) this.firstOrg = this.pc;   // remember first ORG
+                                    const oldPC = this.pc;
+                                    const oldOutputLen = this.output.length;
+                                    const newPC = this.evaluateExpression(token.operands[0]);
+
+                                    // CRITICAL: Set firstOrg BEFORE filling buffer
+                                    if (this.firstOrg === null) this.firstOrg = newPC;
+
+                                    // Auto-detect VIRTUAL section based on ORG address
+                                    // If ORG goes backward or to RAM area (< 0x8000 for ColecoVision), it's VIRTUAL
+                                    if (newPC < this.pc || newPC < this.firstOrg) {
+                                        this.currentSection = 'VIRTUAL';
+                                    } else if (newPC >= this.firstOrg) {
+                                        this.currentSection = 'CODE';
+                                    }
+
+                                    this.pc = newPC;
+
+                                    // DEBUG: Log all ORG directives
+                                    if (this.currentLine <= 900) {
+                                        log(`DEBUG ORG: Line ${this.currentLine}, PC ${oldPC} -> ${this.pc} (${this.pc > oldPC ? '+' : ''}${this.pc - oldPC}), section=${this.currentSection}, output.length was ${oldOutputLen}, firstOrg=${this.firstOrg}`, 'debug');
+                                    }
 
                                     // Pro version: In .REL mode, don't fill with zeros - linker handles placement
-                                    if (this.outputMode !== 'rel') {
-                                        while (this.output.length < this.pc) this.output.push(0);
+                                    // CRITICAL: Output buffer is relative to firstOrg
+                                    // Only fill forward when PC increases (ROM sections)
+                                    // When PC decreases (e.g., jumping to RAM), this is a virtual section for address allocation only
+                                    if (this.outputMode !== 'rel' && this.pc > oldPC) {
+                                        const targetOutputPos = this.pc - this.firstOrg;
+                                        while (this.output.length < targetOutputPos) this.output.push(0);
+                                    }
+
+                                    // DEBUG: Log output buffer fill
+                                    if (this.currentLine <= 900 && this.output.length > oldOutputLen) {
+                                        log(`DEBUG ORG: Filled output buffer from ${oldOutputLen} to ${this.output.length} with zeros`, 'debug');
                                     }
                                     break;
                                 case 'DB': case 'DEFB': case 'DEFM': case 'ASCII': case 'TEXT': case 'BYTE':
+                                    // DB/DW are for ROM data - always generate bytes
                                     token.operands.forEach(op => {
                                         if (op.type === 'string') {
                                             for (let i = 0; i < op.value.length; i++) this.output.push(op.value.charCodeAt(i));
@@ -3248,6 +3890,7 @@
                                     });
                                     break;
                                 case 'DW': case 'DEFW': case 'WORD':
+                                    // DB/DW are for ROM data - always generate bytes
                                     token.operands.forEach(op => {
                                         const val = this.evaluateExpression(op);
 
@@ -3263,17 +3906,53 @@
                                     });
                                     break;
                                 case 'DS': case 'DEFS':
+                                    // DS/DEFS: Reserve space for RAM variables
+                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
+                                    if (this.currentSection !== 'VIRTUAL') {
+                                        log(`ERROR: .DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM)`, 'error');
+                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    }
                                     const size = this.evaluateExpression(token.operands[0]);
-                                    const fill = token.operands.length > 1 ? this.evaluateExpression(token.operands[1]) : 0;
-                                    for (let i = 0; i < size; i++) this.output.push(fill & 0xFF);
+                                    if (size > 65536) {
+                                        log(`ERROR: DS directive at line ${this.currentLine} has suspiciously large size: ${size} (operand: ${token.operands[0].value})`, 'error');
+                                        throw new Error(`DS size too large: ${size} (max 65536). Check operand: ${token.operands[0].value}`);
+                                    }
+                                    // Advance PC to reserve RAM space, but don't output any bytes
+                                    this.pc += size;
                                     break;
                                 case 'INCBIN':
                                     const filename = token.operands[0].value;
                                     const fileData = this.findFile(filename);
                                     this.output.push(...fileData);
                                     break;
+                                case 'SECTION':
+                                    // Handle .section VIRTUAL / .section CODE
+                                    if (token.operands.length > 0) {
+                                        const sectionName = token.operands[0].value.toUpperCase();
+                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                    }
+                                    break;
+                                case 'ALIGN':
+                                    // ALIGN directive: pad output with zeros to next alignment boundary
+                                    const alignBoundary_p3 = this.evaluateExpression(token.operands[0]);
+                                    const alignPadding_p3 = (alignBoundary_p3 - (this.pc % alignBoundary_p3)) % alignBoundary_p3;
+                                    // Output padding bytes (0xFF for ROM, 0x00 for clarity in listing)
+                                    for (let p = 0; p < alignPadding_p3; p++) {
+                                        this.output.push(0xFF);  // Fill with 0xFF (common for ROM padding)
+                                    }
+                                    this.pc += alignPadding_p3;
+                                    break;
                             }
                         } else if (token instanceof Instruction) {
+                            // Set current instruction for debug logging
+                            this.currentInstruction = token;
+
+                            // DEBUG: Log instructions around the problematic area
+                            if (this.currentLine >= 800 && this.currentLine <= 880) {
+                                const instrStr = `${token.mnemonic} ${token.operands.map(o => o.value).join(', ')}`;
+                                log(`DEBUG INSTR: Line ${this.currentLine}, PC ${this.pc}: ${instrStr}`, 'debug');
+                            }
+
                             const key = this.getOpcodeKey(token);
                             const opcode = Z80_OPCODES[key];
                             if (!opcode) {
@@ -3283,7 +3962,7 @@
                                 }).join(', ')} [Generated key: ${key}]`;
                                 throw new Error(errorMsg);
                             }
-                            
+
                             this.output.push(...opcode);
                             
                             // Handle operands
@@ -3358,6 +4037,7 @@
                                     adjustedTargetAddr = targetAddr;
                                 }
 
+                                log(`DEBUG DJNZ: mnemonic=${token.mnemonic}, PC=${this.pc}, instrSize=${instrSize}, currentAddr=${currentAddr}, targetAddr=${targetAddr}, adjustedTargetAddr=${adjustedTargetAddr}`, 'debug');
                                 let offset = adjustedTargetAddr - currentAddr;
                                 if (offset < -128 || offset > 127) throw new Error(`Relative jump out of range for ${token.mnemonic}: offset ${offset} (target: ${adjustedTargetAddr}, current: ${currentAddr})`);
                                 if (offset < 0) offset += 256;
@@ -3382,7 +4062,22 @@
                                 }
                             }
                         }
-                        this.pc = this.output.length;
+                        if (this.output.length > 100000) {
+                            log(`WARNING: Output buffer is suspiciously large: ${this.output.length} bytes at line ${this.currentLine}`, 'warn');
+                        }
+                        // CRITICAL: PC must stay absolute, not track output buffer length
+                        // Increment PC by the number of bytes generated for this instruction
+                        const bytesGenerated = this.output.length - startOutputLen;
+                        if (this.currentLine <= 100) {
+                            log(`DEBUG PC INC: Line ${this.currentLine}, startPC=${startPC}, startOutputLen=${startOutputLen}, output.length=${this.output.length}, bytesGenerated=${bytesGenerated}`, 'debug');
+                        }
+                        if (bytesGenerated > 0) {
+                            const oldPC = this.pc;
+                            this.pc = startPC + bytesGenerated;
+                            if (this.currentLine <= 100) {
+                                log(`DEBUG PC INC: Line ${this.currentLine}, PC ${oldPC} -> ${this.pc} (startPC=${startPC} + ${bytesGenerated})`, 'debug');
+                            }
+                        }
                     } catch (error) {
                         // Capture error for listing
                         hasError = true;
@@ -3394,7 +4089,8 @@
                         throw new Error(contextMsg);
                     } finally {
                         // Create listing entry after processing token
-                        const bytesGenerated = this.output.slice(startPC, this.pc);
+                        // Use buffer positions, not absolute PC values
+                        const bytesGenerated = this.output.slice(startOutputLen, this.output.length);
 
                         // For ORG and other PC-changing directives, show the new PC, not the old one
                         let displayAddress = startPC;
@@ -3692,7 +4388,12 @@
 
                     // Handle temporary symbol references
                     expr = this.resolveTemporarySymbolReference(expr);
-                
+                    if (originalExpr !== expr && originalExpr.startsWith('.')) {
+                        const inst = this.currentInstruction;
+                        const instStr = inst ? `${inst.mnemonic} ${(inst.operands || []).map(o => o.value).join(', ')}` : 'unknown';
+                        log(`DEBUG EVAL: Resolved '${originalExpr}' to '${expr}' at PC ${this.pc} (line ${this.currentLine}, instruction: ${instStr})`, 'debug');
+                    }
+
                     // Check if it's a direct opcode reference
                     const opcode = Z80_OPCODES[expr.toLowerCase()];
                     if (opcode) {
@@ -3711,20 +4412,27 @@
 
                     // NOW replace $ with PC (for expressions like $ or $+5 where $ is alone)
                     parsedExpr = parsedExpr.replace(/\$/g, this.pc);
-                    parsedExpr = parsedExpr.replace(/\*/g, this.pc); // Alternative PC symbol
+                    // Don't replace * - it's the multiplication operator, not PC symbol
+                    // (If we need * as PC symbol in the future, we'll need context-aware replacement)
 
                     // Replace constants first (higher priority than symbols)
                     const sortedConstants = Object.keys(this.constantTable).sort((a, b) => b.length - a.length);
                     for (const constant of sortedConstants) {
-                        const regex = new RegExp(`\\b${constant}\\b`, 'g');
+                        // Escape special regex characters in constant name
+                        const escapedConstant = constant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`\\b${escapedConstant}\\b`, 'gi');  // Added 'i' flag for case-insensitive
                         parsedExpr = parsedExpr.replace(regex, this.constantTable[constant]);
                     }
 
-                    // Replace symbols
+                    // Replace symbols (case-insensitive for Z80 assembly compatibility)
                     const sortedSymbols = Object.keys(this.symbolTable).sort((a, b) => b.length - a.length);
 
                     for (const symbol of sortedSymbols) {
-                        const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                        // Escape special regex characters in symbol name
+                        const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        // For symbols starting with dot (local labels), don't use word boundary at start
+                        const boundaryStart = symbol.startsWith('.') ? '' : '\\b';
+                        const regex = new RegExp(`${boundaryStart}${escapedSymbol}\\b`, 'gi');  // Added 'i' flag for case-insensitive
                         parsedExpr = parsedExpr.replace(regex, this.symbolTable[symbol]);
                     }
 
@@ -3732,6 +4440,52 @@
                     // Matches: 'X' or "X" where X is any single character
                     parsedExpr = parsedExpr.replace(/['"](.)['"]/g, (match, char) => {
                         return char.charCodeAt(0).toString();
+                    });
+
+                    // Enhanced expression operators: HIGH(), LOW(), <, >
+                    // HIGH(value) or >value - Extract high byte (bits 8-15)
+                    // LOW(value) or <value - Extract low byte (bits 0-7)
+
+                    // Handle HIGH() function
+                    parsedExpr = parsedExpr.replace(/HIGH\s*\(\s*([^)]+)\s*\)/gi, (match, inner) => {
+                        try {
+                            const innerVal = new Function(`return ${inner}`)();
+                            return ((innerVal >> 8) & 0xFF).toString();
+                        } catch (e) {
+                            return match; // Leave as-is if can't evaluate yet
+                        }
+                    });
+
+                    // Handle LOW() function
+                    parsedExpr = parsedExpr.replace(/LOW\s*\(\s*([^)]+)\s*\)/gi, (match, inner) => {
+                        try {
+                            const innerVal = new Function(`return ${inner}`)();
+                            return (innerVal & 0xFF).toString();
+                        } catch (e) {
+                            return match; // Leave as-is if can't evaluate yet
+                        }
+                    });
+
+                    // Handle > operator (high byte) - must be at start or after non-letter
+                    // >$1234 -> high byte of 0x1234
+                    parsedExpr = parsedExpr.replace(/(^|[^a-zA-Z])>([0-9x]+)/gi, (match, prefix, num) => {
+                        try {
+                            const val = parseInt(num, num.startsWith('0x') || num.startsWith('0X') ? 16 : 10);
+                            return prefix + ((val >> 8) & 0xFF).toString();
+                        } catch (e) {
+                            return match;
+                        }
+                    });
+
+                    // Handle < operator (low byte) - must be at start or after non-letter
+                    // <$1234 -> low byte of 0x1234
+                    parsedExpr = parsedExpr.replace(/(^|[^a-zA-Z])<([0-9x]+)/gi, (match, prefix, num) => {
+                        try {
+                            const val = parseInt(num, num.startsWith('0x') || num.startsWith('0X') ? 16 : 10);
+                            return prefix + (val & 0xFF).toString();
+                        } catch (e) {
+                            return match;
+                        }
                     });
 
                     // Pro version: Check if remaining symbol is EXTERN (after symbol table replacement)
@@ -3761,7 +4515,10 @@
                             throw new Error(`Undefined symbol in expression: ${originalExpr} (evaluated to: ${parsedExpr})`);
                         }
 
-                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.]/g, '');
+                        // Allow arithmetic operators: + - * / ( )
+                        // Allow bitwise operators: & | ^ ~ << >>
+                        // Allow modulo: %
+                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.\&\|\^\~\<\>\%]/g, '');
                         if (sanitizedExpr.trim() !== parsedExpr.trim()) {
                              if (this.currentPass < 3) return 0;
                              throw new Error(`Invalid characters in expression: ${originalExpr} (cleaned: ${sanitizedExpr})`);
@@ -4117,6 +4874,7 @@
 
                 downloadBtn.classList.remove('hidden');
                 exportSymbolsBtn.classList.remove('hidden');
+                syncMobileMenuItemsPro();
 
                 // Generate .LST file
                 const lstContent = assembler.generateListingFile();
@@ -4148,6 +4906,9 @@
 
                 switchTab('symbols'); // Automatically switch to symbols tab to show results
                 updateAdaptiveMenu(); // Update adaptive menu with new available actions
+
+                // Flush any pending logs
+                flushLogs();
             }
         });
 
@@ -4776,6 +5537,9 @@
 
                 moreDropdown.classList.remove('hidden');
             }
+
+            // Sync mobile menu after updating adaptive menu
+            syncMobileMenuItemsPro();
         }
 
         // Helper function to create action button
