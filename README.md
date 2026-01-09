@@ -6,370 +6,446 @@ A powerful web-based Z80 assembler specifically designed for ColecoVision game d
 
 Amy's ColecoVision Assembler is a complete Z80 development environment that runs entirely in your web browser. It features:
 
-- **Multi-syntax Z80 Assembler** - Supports zmac, TASM, MACRO-80, MRAS, Intel, and Motorola assembly styles
-- **ColecoVision ROM Generation** - Creates ready-to-run .col files for ColecoVision emulators and hardware
-- **Real-time Symbol Table** - View all labels, constants, and addresses as you assemble
-- **Authentic Boot Screen Emulation** - Preview your game's title screen with accurate TMS9918A rendering
-- **Project Management** - Handle multiple files with includes, macros, and conditional assembly
-- **Syntax Highlighting** - CodeMirror-powered editor with Z80 instruction highlighting
+- **Browser-Based** - No installation, no setup, works offline
+- **Two Versions** - Standard (single-file) and Pro (multi-module projects)
+- **Modern UI** - Syntax highlighting, responsive design, drag & drop
+- **ColecoVision Optimized** - Boot screen emulation, proper ROM headers
+- **Cross-Platform** - Works on Windows, Mac, Linux, and mobile devices
 
-## 📦 Two Versions Available
+## 🚀 Quick Start
 
-### AmysCVAssembler.html (Standard Version)
-
-**Best for:** Most users, straightforward projects, learning Z80 assembly
-
-**Features:**
-- ✅ Full Z80 instruction set with all syntaxes (zmac, TASM, etc.)
-- ✅ Binary output (.col ROM files)
-- ✅ Multi-file projects with INCLUDE support
-- ✅ Macros and conditional assembly (IF/ELSE/ENDIF)
-- ✅ Symbol table export (JSON and OpenMSX .sym format)
-- ✅ OpenMSX debugger symbol files (.sym) - automatic generation
-- ✅ ColecoVision boot screen emulation
-- ✅ File management with download/rename/delete icons
-- ✅ .asm, .z80, .s file support
-- ✅ Auto-named output files (build_filename.col)
-
-**File Size:** ~140 KB
-
-### AmysCVAssemblerPro.html (Pro Version)
-
-**Best for:** Advanced developers, multi-module projects, library development
-
-**Features:** Everything in Standard version, PLUS:
-- ✅ **Relocatable Object Files** (.REL format) - LINK-80 and Extended formats
-- ✅ **Modular Linking** - Link multiple .REL files into a single binary
-- ✅ **Library Support** (.LIB files) - Only pulls in functions you actually use
-- ✅ **Smart Linking** - Automatic dead code elimination
-- ✅ **Module Inspector** - View symbols, relocations, and dependencies in .REL files
-- ✅ **Public/External Symbols** - Share functions between modules
-- ✅ **Selective Compilation** - Assemble to .REL or directly to .COL
-- ✅ **Project Manifest** - Track main files and build configurations
-- ✅ **Listing Files** (.lst) - Traditional assembly listings with addresses and machine code
-
-**File Size:** ~260 KB
-
-## 🚀 Getting Started
-
-### Quick Start (5 seconds)
-
-1. Open either HTML file in any modern web browser (Chrome, Firefox, Edge, Safari)
-2. Drag and drop your .asm, .z80, or .s file onto the window
+1. Open either HTML file in any modern web browser
+2. Drag and drop your .asm file onto the window
 3. Click **Compile**
-4. Click **Download** to get your ColecoVision ROM!
+4. Click **Download** to get your ColecoVision ROM
 
-### Your First ColecoVision ROM
+## 📦 Files
+
+### Main Applications
+- **AmysCVAssembler.html** - Standard version (single-file assembly)
+- **AmysCVAssemblerPro.html** - Pro version (multi-module linking, libraries)
+- **index.html** - Version selector page
+
+### Features Comparison
+
+| Feature | Standard | Pro |
+|---------|----------|-----|
+| **Assembly** |
+| Single-file assembly | ✅ | ✅ |
+| Z80 instruction set | ✅ | ✅ |
+| INCLUDE directive | ✅ | ✅ |
+| Macros (MACRO/ENDM) | ✅ | ✅ |
+| Conditional assembly (IF/IFDEF) | ✅ | ✅ |
+| **Directives** |
+| TIMES directive (repeat) | ✅ | ✅ |
+| ALIGN directive (padding) | ✅ | ✅ |
+| Expression operators ($, HIGH, LOW, <, >) | ✅ | ✅ |
+| **Output** |
+| .COL ROM files | ✅ | ✅ |
+| Symbol files (.sym) | ✅ | ✅ |
+| Assembly listing (.lst) | ❌ | ✅ |
+| **Advanced** |
+| Multi-module linking | ❌ | ✅ |
+| .REL object files | ❌ | ✅ |
+| .LIB libraries | ❌ | ✅ |
+| PUBLIC/EXTERN symbols | ❌ | ✅ |
+| **Emulation** |
+| Boot screen preview | ✅ | ✅ |
+
+## 📝 Example Code
+
+### Complete Working Example: 7 Moving Sprites
+
+This complete example displays 7 sprites with collision detection and movement. Copy-paste ready!
 
 ```assembly
-; hello.asm - Minimal ColecoVision program
-.org $8000
+; Colecovision - Sprites Demo
+; by Daniel Bienvenu, 2010
 
-; ColecoVision ROM header
-.dw $AA55, $7500, $0000, $0000, $0000, $0000, $0000
+NBR_SPRITES: equ 7
 
-; Game title (shown on boot screen)
-.db "2024 YOUR NAME HERE"
-.db "     HELLO WORLD    "
+fname "7spritesmoving.rom"
+cpu Z80
+org $8000
+dw $aa55,$7100,$7000,0,0,Start
+dw 0,0,0,0,0,0,0,0,0,0
+ret
 
-; Code starts here
+Nmi:
+    ; Display Sprite(s)
+    ld a,NBR_SPRITES
+    call $1fc4              ; WR_SPR_NM_TBL
+    ld a,$d0
+    out ($be),a
+
+    ; Update Sprites position
+    ld de,($8002)
+    ld hl,$7180
+    ld b,NBR_SPRITES
+UpdateSpritesCoor:
+    ld a,160
+    call AddfromHLinDE
+    ld a,216
+    call AddfromHLinDE
+    inc de
+    inc de
+    djnz UpdateSpritesCoor
+
+    ; Get Video Status (collision detection)
+    call $1fdc              ; READ_REGISTER
+    bit 6,a
+    jr z,DoNothing
+    and $1f                 ; keep only 5bits = sprite#
+    ld e,a
+    ld d,0
+    ld hl,($8004)
+    push hl
+    add hl,de
+    ld c,(hl)               ; Get corresponding Sprite entry
+    pop hl
+    ld a,NBR_SPRITES
+    ld b,a
+reordering1:
+    ld (hl),c
+    inc hl
+    inc c
+    cp c
+    jr nz,reordering2
+    ld c,0
+reordering2:
+    djnz reordering1
+DoNothing:
+    retn
+
+; Apply movement incrementation and bounce effect
+AddfromHLinDE:
+    push bc
+    ld b,a
+    ld c,(hl)
+    ld a,(de)
+    add a,c
+    ; if new position is lower than 24 or higher than max then bounce
+    cp 24
+    jr c,bounce
+    cp b
+    jr nc,bounce
+    jr endbounce
+bounce:
+    ld a,c
+    neg
+    ld (hl),a
+    ld c,a
+    ld a,(de)
+    add a,c
+endbounce:
+    ld (de),a
+    inc hl
+    inc de
+    pop bc
+    ret
+
+Start:
+    call $1f85              ; MODE_1
+    call $1fd6              ; TURN_OFF_SOUND
+    ; Clear VRAM
+    ld hl,0
+    ld de,$4000
+    xor a
+    call $1f82              ; FILL_VRAM
+    ; Load Sprite Pattern
+    ld de,$3800
+    ld hl,HappyAlienBugFace
+    ld bc,32
+    call $1fdf              ; WRITE_VRAM
+    ; Init. Sprites Order
+    ld a,NBR_SPRITES
+    call $1fc1              ; INIT_SPR_ORDER
+    ld de,($8002)
+    ld hl,SprAttrib
+    ld bc,NBR_SPRITES*4
+    ldir
+    ld de,$7180
+    ld bc,NBR_SPRITES*2
+    ldir
+    ; Turn On Display + Enable NMI
+    ld bc,$01e2
+    call $1fd9              ; WRITE_REGISTER
+TheEnd:
+    jp TheEnd
+
+SprAttrib:
+    db 82, 24,0,13          ; Y=82, X= 24, Pattern#0, Color=13
+    db 84, 56,0, 8          ; Y=84, X= 56, Pattern#0, Color=8
+    db 86, 88,0, 9          ; Y=86, X= 88, Pattern#0, Color=9
+    db 88,120,0,10          ; Y=88, X=120, Pattern#0, Color=10
+    db 90,152,0, 3          ; Y=90, X=152, Pattern#0, Color=3
+    db 92,184,0, 7          ; Y=92, X=184, Pattern#0, Color=7
+    db 94,216,0, 4          ; Y=94, X=216, Pattern#0, Color=4
+
+SprMovements:
+    db 0,0
+    db 1,0
+    db 0,1
+    db -1,0
+    db 0,-1
+    db 1,1
+    db -1,-1
+
+HappyAlienBugFace:
+    db %00011000
+    db %01100100
+    db %11000011
+    db %00001111
+    db %00011001
+    db %00110000
+    db %00110110
+    db %01111111
+    db %01111111
+    db %01111111
+    db %01110000
+    db %00110000
+    db %00111000
+    db %00011110
+    db %00001111
+    db %00000011
+
+    db %00001100
+    db %00010010
+    db %11100011
+    db %11111001
+    db %11001100
+    db %10000110
+    db %10110110
+    db %11111111
+    db %11111111
+    db %11111111
+    db %00000111
+    db %00000110
+    db %00001110
+    db %00111100
+    db %11111000
+    db %11100000
+```
+
+This example demonstrates:
+- **ColecoVision BIOS calls** - Standard ROM initialization
+- **Sprites** - Loading and displaying sprite graphics
+- **Animation** - Moving sprites with different velocities
+- **Collision detection** - Sprite overlap detection with reordering
+- **Bounce effect** - Screen boundary detection and direction reversal
+- **NMI interrupt** - Vertical blank interrupt handling
+
+### Hello World Example
+
+Simple text display demonstrating ColecoVision BIOS calls and NMI interrupts.
+
+```assembly
+; COLECOVISION - HELLO WORLD!
+; By Daniel Bienvenu, 2010
+
+; BIOS ENTRY POINTS
+CALC_OFFSET: equ $08c0
+LOAD_ASCII: equ $1f7f
+FILL_VRAM: equ $1f82
+MODE_1: equ $1f85
+TURN_OFF_SOUND: equ $1fd6
+WRITE_REGISTER: equ $1fd9
+READ_REGISTER: equ $1fdc
+WRITE_VRAM: equ $1fdf
+
+; VRAM TABLES
+VRAM_NAME: equ $1800
+VRAM_COLOR: equ $2000
+
+fname "hello.rom"
+cpu Z80
+org $8000
+
+; ROM HEADER
+db $aa,$55              ; Signature
+dw 0,0,0,0
+dw Start
+
+rst_8:  reti : nop
+rst_10: reti : nop
+rst_18: reti : nop
+rst_20: reti : nop
+rst_28: reti : nop
+rst_30: reti : nop
+rst_38: reti : nop
+jp Nmi
+
+db "HELLO WORLD!/PRINT ON SCREEN/2010"
+
+Start:
+    im 1
+
+    ; Clear video memory
+    ld hl,$0000
+    ld de,$4000
+    xor a
+    call FILL_VRAM
+
+    ; Initialize screen mode 1
+    call MODE_1
+    call TURN_OFF_SOUND
+
+    ; Load default font
+    call LOAD_ASCII
+
+    ; Set color (white on black)
+    ld hl,VRAM_COLOR
+    ld de,32
+    ld a,$f0            ; White foreground, black background
+    call FILL_VRAM
+
+    ; Print "HELLO WORLD!" centered
+    ld de,VRAM_NAME+10  ; Center position
+    ld hl,HelloWorld
+    ld bc,12            ; Character count
+    call WRITE_VRAM
+
+    ; Turn on screen
+    ld bc,$01c2
+    call WRITE_REGISTER
+
+TheEnd:
+    jp TheEnd
+
+HelloWorld:
+    db "HELLO WORLD!"
+
+Nmi:
+    ; Random color effect
+    ld hl,VRAM_COLOR
+    ld de,32
+    ld a,r              ; Random value from refresh register
+    and $f0             ; Keep background black
+    call FILL_VRAM
+
+    call READ_REGISTER  ; Required for NMI
+    retn
+```
+
+This example demonstrates:
+- **Text display** - Using BIOS to print on screen
+- **BIOS entry points** - Standard ColecoVision functions
+- **NMI interrupt** - Changing colors randomly during vertical blank
+- **ROM header** - Proper RST vectors setup
+
+### TIMES and ALIGN Directives
+
+Both Standard and Pro versions support gasm80-compatible directives:
+
+**TIMES** - Repeat instruction or data N times:
+- `TIMES 256 DB 0x00` - Fill 256 bytes with zeros
+- `TIMES 8 NOP` - Insert 8 NOP instructions
+- `TIMES BUFFER_SIZE DB 0xFF` - Works with constants
+
+**ALIGN** - Align to boundary (pads with 0xFF):
+- `ALIGN 128` - Pad to next 128-byte boundary
+- `ALIGN 16` - Pad to next 16-byte boundary
+- Useful for VDP table alignment requirements
+
+### Pro Version: Multi-Module Example
+
+**main.asm:**
+```assembly
+    .globl start
+    .extern multiply        ; Import from math module
+
 start:
-    di                  ; Disable interrupts
-    ld sp, $7400        ; Set stack pointer
-
-loop:
-    jr loop             ; Infinite loop
-
-.end
+    ld bc, 10
+    ld de, 20
+    call multiply           ; Result in HL
+    halt
 ```
 
-Save this as `hello.asm`, drag it into the assembler, compile, and you'll get:
-- `build_hello.col` - Your ColecoVision ROM ready to run!
-- `hello.sym` - Symbol file for debugging (automatically generated)
-- `hello.lst` - Assembly listing with machine code (Pro version only)
-
-## 📖 Supported Assembly Syntaxes
-
-### TASM Style (NEW!)
+**math.asm:**
 ```assembly
-.org $8000              ; Dot-prefixed directives
-.dw $AA55               ; Define word
-.db "Hello"             ; Define bytes
-TABLE .equ $7500        ; Label before directive
-.end                    ; End of assembly
+    .globl multiply         ; Export this function
+
+multiply:
+    ; Multiply BC * DE, result in HL
+    ld hl, 0
+mult_loop:
+    add hl, bc
+    dec de
+    ld a, d
+    or e
+    jr nz, mult_loop
+    ret
 ```
 
-### zmac Style
-```assembly
-org 8000h               ; No dot prefix
-dw 0AA55h               ; Hex with 'h' suffix
-db "Hello"              ; Define bytes
-TABLE equ 7500h         ; Standard EQU
-```
+Compile both to .REL, then link them together in the Pro version.
 
-### Intel/MACRO-80 Style
-```assembly
-        ORG     8000H
-        DW      0AA55H
-        DB      'Hello'
-TABLE   EQU     7500H
-```
+## 🔧 Supported Syntax
 
-All styles work seamlessly - use what you're comfortable with!
+### Number Formats
+- **Hexadecimal**: `$1234`, `0x1234`, `1234h`
+- **Binary**: `%10101010`, `10101010b`
+- **Octal**: `@777`
+- **Decimal**: `12345`
 
-## 🎯 Key Features Explained
+### Expressions
+- **$ operator** - Current program counter: `jp $ + 5`
+- **HIGH()** - High byte: `ld a, HIGH($1234)` → `$12`
+- **LOW()** - Low byte: `ld a, LOW($1234)` → `$34`
+- **< operator** - Low byte: `ld a, <$1234` → `$34`
+- **> operator** - High byte: `ld a, >$1234` → `$12`
 
-### File Extensions
+### Directives
+- **ORG** - Set origin address
+- **DB/DEFB** - Define byte(s)
+- **DW/DEFW** - Define word(s)
+- **DS/DEFS** - Define space
+- **EQU** - Define constant
+- **TIMES** - Repeat instruction/data
+- **ALIGN** - Align to boundary
+- **INCLUDE** - Include another file
+- **MACRO/ENDM** - Define macro
+- **IF/IFDEF/ELSE/ENDIF** - Conditional assembly
 
-**Source Files:**
-- **.asm** - Standard assembly source
-- **.z80** - Alternative assembly source (treated same as .asm)
-- **.s** - Alternative assembly source (treated same as .asm)
+## 🛠️ Project Structure
 
-**Output Files:**
-- **.col** - ColecoVision ROM binary (ready to run in emulators)
-- **.sym** - OpenMSX debugger symbols (automatically generated)
-- **.lst** - Assembly listing with machine code (Pro version, auto-generated)
-- **.rel** - Relocatable object files (Pro version)
-- **.lib** - Static libraries (Pro version)
+This repository includes:
+- **examples/** - Working assembly examples
+- **z80/** - Development workspace *(work in progress)*
+- **dev/** - Development tools, tests, backups *(not for GitHub)*
+- **docs/** - Complete documentation *(not for GitHub)*
 
-### Hex Number Formats
-All of these work for the value 0x702B (28715):
-- `$702B` - TASM/zmac style (dollar sign prefix)
-- `0x702B` - C-style (0x prefix)
-- `702Bh` - Intel style (h suffix)
-- Expressions: `$702B+10` evaluates to 28725
+## 🎯 Why Choose This Assembler?
 
-### Output Filenames
-Both versions now generate smart output names:
-- Input: `game.asm` → Output: `build_game.col`
-- Input: `ddt3.z80` → Output: `build_ddt3.col`
-- No more generic "output.col"!
+### vs TASM / ZMAC
+- ✅ No installation required (browser-based)
+- ✅ Works on any OS (Windows, Mac, Linux)
+- ✅ Modern UI with syntax highlighting
+- ✅ ColecoVision-specific features (boot screen preview)
 
-### Project Files Panel
-Each file in your project shows three icons:
-- **💾 (Download icon)** - Download this specific file
-- **✏️ (Rename icon)** - Rename this file
-- **🗑️ (Delete icon)** - Remove file from project (with confirmation)
+### vs gasm80
+- ✅ TIMES and ALIGN directives (gasm80-compatible)
+- ✅ Multi-file projects with INCLUDE
+- ✅ Macros and conditional assembly
+- ✅ Pro version: Multi-module linking
 
-## 🔧 Pro Version: Advanced Workflow
+### vs Command-Line Assemblers
+- ✅ Instant feedback (no terminal commands)
+- ✅ Built-in text editor with highlighting
+- ✅ Visual boot screen preview
+- ✅ Works offline after first load
 
-### Creating a Multi-Module Project
+## 📖 Documentation
 
-**Step 1:** Create your modules with public symbols
-
-```assembly
-; math.asm
-        .globl  multiply    ; Export this function
-        .area   _CODE
-
-multiply:                   ; C = A * B
-        ld      c, 0
-loop:   or      a
-        ret     z
-        add     c, b
-        dec     a
-        jr      loop
-```
-
-**Step 2:** Use symbols in your main program
-
-```assembly
-; main.asm
-        .globl  multiply    ; Import external function
-        .area   _CODE
-
-start:  ld      a, 5
-        ld      b, 7
-        call    multiply    ; C = 5 * 7 = 35
-        ; ... rest of code
-```
-
-**Step 3:** Assemble and link
-
-1. Load both files into the project
-2. Select output mode: **LINK-80 .REL** or **Extended .REL**
-3. Compile both files (creates .REL files automatically)
-4. **Switch output mode to Binary (.col)**
-5. Click **Link Modules** button
-6. Download your linked binary!
-
-### Using Libraries
-
-If you have a `.lib` file (like the ColecoVision development libraries):
-
-1. Drop your `.lib` file into the project
-2. Compile your main program to `.REL`
-3. Switch to Binary output mode
-4. Click **Link Modules**
-5. Only the functions you actually call are included (dead code elimination)!
-
-## 📊 Symbol Table & Debugging Support
-
-After compilation, switch to the **Symbols** tab to see:
-
-- All labels with their addresses
-- Constants (EQU/EVAL values)
-- File and line number where each symbol is defined
-- Size of data blocks
-- Easy reference for debugging
-
-### Export Formats
-
-**JSON Symbol Export:**
-- Structured data with source file locations
-- Perfect for documentation tools and custom scripts
-- Contains full debugging information
-
-**OpenMSX Symbol Files (.sym):**
-- **Automatically generated** with every compilation
-- Compatible with OpenMSX debugger and similar Z80 tools
-- Standard format: `LABEL: equ HEXh`
-- Found in Project Files panel after compilation
-- Download and use with debuggers for symbolic debugging
-
-Example `.sym` file:
-```
-INIT_VDP: equ 8003h
-MAIN_LOOP: equ 8009h
-SPRITE_TABLE: equ 7000h
-START: equ 8000h
-```
-
-### Using with OpenMSX Debugger
-
-1. Compile your program in AmysCVAssembler
-2. Download the `.sym` file from Project Files
-3. Load in OpenMSX debugger:
-   ```tcl
-   sym_file load yourfile.sym
-   ```
-4. Use symbolic debugging:
-   ```tcl
-   bp set MAIN_LOOP          # Set breakpoint by label name
-   print [SPRITE_TABLE]      # Examine memory by symbol
-   ```
-
-**Pro Version Extra:** Also generates `.lst` listing files with full assembly listings including addresses and machine code bytes.
-
-## 🎨 Boot Screen Emulation
-
-Click **Test ColecoVision Screen** after compiling to see your game's title screen rendered exactly as it appears on real hardware:
-
-- Authentic TMS9918A video chip rendering
-- ColecoVision logo animation
-- Your game title displayed on-screen
-- Pixel-perfect accuracy
-- DINA 2-in-1 mode also supported
-
-## 🛠️ Compatibility
-
-### Browser Support
-- ✅ Chrome/Edge (recommended)
-- ✅ Firefox
-- ✅ Safari
-- ✅ Opera
-- ⚠️ IE11 not supported
-
-### Emulator Compatibility
-Output ROMs work with:
-- BlueMSX
-- ColEm
-- CoolCV
-- MAME/MESS
-- Real ColecoVision hardware (via flash cartridge)
-
-## 📝 Tips & Tricks
-
-### Fast Development Cycle
-1. Keep the assembler open in your browser
-2. Edit your .asm file in your favorite text editor
-3. Drag and drop the file again to reload
-4. Hit Compile - no need to clear the project!
-
-### Debugging Assembly Errors
-The assembler performs 3 passes:
-- **Pass 1:** Expands macros and processes conditionals
-- **Pass 2:** Builds symbol table (resolves forward references)
-- **Pass 3:** Generates binary code
-
-Errors show which pass failed and the exact line number.
-
-### Include Files
-```assembly
-.include "macros.inc"    ; Load common macros
-.include "sprites.asm"   ; Include sprite data
-```
-
-All included files must be in the project. Just drop them in!
-
-### Macros
-```assembly
-VDPWRITE    .macro  addr, value
-            ld      a, \1
-            out     ($BE), a
-            ld      a, \2
-            out     ($BE), a
-            .endm
-
-; Use it:
-            VDPWRITE  $00, $40  ; Expands to the 4 instructions above
-```
-
-## 🐛 Known Limitations
-
-### Standard Version
-- Single binary output only (no modular linking)
-- No library support
-- All code must link into one contiguous ROM
-
-### Pro Version
-- .REL format has 6-character symbol limit in LINK-80 mode
-- Use Extended .REL mode for unlimited symbol lengths
-- Linking requires switching output mode to Binary
-
-## 📚 Additional Resources
-
-### Learning Z80 Assembly
-- [Z80 Instruction Set](http://z80-heaven.wikidot.com/instructions-set)
-- [ColecoVision Programming Guide](https://atarihq.com/danb/files/CV-Tech.txt)
-
-### ColecoVision Development
-- [ColecoVision BIOS Calls](http://www.atarihq.com/danb/files/CV-BIOS.txt)
-- [VDP Programming](http://www.smspower.org/Development/VDPRegisters)
-
-### Assembler Syntax
-- [zmac Documentation](https://github.com/ocoleman/zmac)
-- [TASM Documentation](http://www.ticalc.org/archives/files/fileinfo/250/25051.html)
-
-## 🎯 Version History
-
-### Current Release
-- ✅ Added TASM syntax support (.org, .dw, .db, etc.)
-- ✅ Added .z80 file extension support
-- ✅ Fixed hex number parsing in expressions ($702b+10)
-- ✅ Added END directive
-- ✅ Added file download/rename/delete icons
-- ✅ Smart output filenames (build_filename.col)
-- ✅ **OpenMSX debugger symbol files (.sym) - automatic generation**
-- ✅ Pro: Relocatable object file support (.REL)
-- ✅ Pro: Module linking with dead code elimination
-- ✅ Pro: Library support (.LIB files)
-- ✅ Pro: Listing files (.lst) with addresses and machine code
-- ✅ Pro: Clean Project button removes temporary files (.lst, .sym)
-
-## 🤝 Credits
-
-**Created by:** Amy
-**Based on:** zmac assembler syntax and Z80 instruction set
-**TMS9918A Emulation:** Authentic ColecoVision video chip rendering
-**Editor:** CodeMirror text editor
-**Compression:** pako (zlib), JSZip for archive support
+For complete documentation and technical details, see:
+- [Full Documentation](docs/FULL_README.md)
+- [Changelog](docs/CHANGELOG.md)
+- [Bug Fixes](docs/BUGFIX_TIMES_EQU.md)
 
 ## 📄 License
 
-This tool is provided as-is for ColecoVision homebrew development. Feel free to use it for your retro gaming projects!
+Created by Amy Purple
+For ColecoVision game development
 
 ---
 
-**Ready to create your ColecoVision masterpiece? Open either HTML file and start coding! 🎮**
+**Ready to create ColecoVision games? Open either HTML file and start coding! 🎮**
