@@ -27,13 +27,13 @@
         }
         .file-tree-item {
             cursor: pointer;
-            padding: 6px 8px;        /* au lieu de 8px 12px */
-            margin: 2px 0;           /* au lieu de 4px 0 */
+            padding: 6px 8px;
+            margin: 2px 0;
             background: #334155;
-            border-radius: 4px;      /* au lieu de 6px */
+            border-radius: 4px;
             transition: all 0.2s ease;
             border: 1px solid transparent;
-            font-size: 13px;         /* AJOUTER cette ligne */
+            font-size: 13px;
         }
         .file-tree-item:hover {
             background-color: #475569;
@@ -350,23 +350,23 @@
 
     <main class="flex-grow flex p-4 gap-4 overflow-hidden">
         <!-- Left Panel: File Tree and Drop Zone -->
-        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">  <!-- p-3 au lieu de p-4 -->
-            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-1">  <!-- pb-1 au lieu de pb-2 -->
-                <h2 class="text-base font-semibold">Project Files</h2>  <!-- text-base au lieu de text-lg -->
+        <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">
+            <div class="flex items-center justify-between mb-2 border-b border-gray-700 pb-1">
+                <h2 class="text-base font-semibold">Project Files</h2>
                 <div class="flex items-center gap-2">
-                    <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-lg cursor-pointer" title="Download entire project as ZIP">  <!-- text-lg au lieu de text-xl -->
+                    <button type="button" id="download-project-btn" class="text-blue-400 hover:text-blue-300 transition-colors text-lg cursor-pointer" title="Download entire project as ZIP">
                         💾
                     </button>
-                    <span id="file-count" class="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-400">0</span>  <!-- py-0.5 au lieu de py-1 -->
+                    <span id="file-count" class="bg-gray-700 px-2 py-0.5 rounded text-xs text-gray-400">0</span>
                 </div>
             </div>
-            <div id="file-tree" class="flex-grow overflow-y-auto mb-3">  <!-- mb-3 au lieu de mb-4 -->
-                <p class="text-gray-400 text-xs">Drop files below</p>  <!-- text-xs au lieu de text-sm, texte raccourci -->
+            <div id="file-tree" class="flex-grow overflow-y-auto mb-3">
+                <p class="text-gray-400 text-xs">Drop files below</p>
             </div>
-            <div id="drop-zone" class="p-3 text-center rounded-lg cursor-pointer transition-colors">  <!-- p-3 au lieu de p-6 -->
+            <div id="drop-zone" class="p-3 text-center rounded-lg cursor-pointer transition-colors">
                 <p class="text-gray-400">
-                    <span class="block mb-1 text-2xl">📁</span>  <!-- mb-1 au lieu de mb-2, text-2xl au lieu de text-3xl -->
-                    <span class="text-sm font-semibold">Drag & Drop</span>  <!-- text-sm ajouté, texte raccourci -->
+                    <span class="block mb-1 text-2xl">📁</span>
+                    <span class="text-sm font-semibold">Drag & Drop</span>
                 </p>
                 <input type="file" id="file-input" class="hidden" multiple accept=".asm,.z80,.s,.inc,.h,.rel,.o,.obj,.lib,.a,.bin,.rom,.col,.zip,.gz,.zx0,.pletter,.gfx,.chr,.dat,.map" title="Select files to upload">
             </div>
@@ -401,6 +401,9 @@
     </main>
 
     <script>
+        // Configuration: Set to true to enable debug logging
+        const DEBUG_MODE = false;
+
         // Enhanced CodeMirror setup with better Z80 syntax highlighting
         CodeMirror.defineSimpleMode("z80", {
             start: [
@@ -775,6 +778,17 @@
                 burgerMenuPro.classList.remove('open');
                 mobileMenuPro.classList.remove('show');
             }
+        });
+
+        // Close context menu dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdowns = document.querySelectorAll('[data-dropdown-menu]');
+            dropdowns.forEach(dropdown => {
+                const menuButton = dropdown.previousElementSibling;
+                if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
         });
 
         // Sync output mode between desktop and mobile
@@ -1360,79 +1374,102 @@
                     }
                 };
 
-                // Add download button
-                const downloadIcon = document.createElement('span');
-                downloadIcon.innerHTML = '💾';
-                downloadIcon.style.cursor = 'pointer';
-                downloadIcon.style.marginLeft = '8px';
-                downloadIcon.style.fontSize = '16px';
-                downloadIcon.style.padding = '4px 6px';
-                downloadIcon.style.borderRadius = '4px';
-                downloadIcon.style.transition = 'all 0.2s ease';
-                downloadIcon.title = 'Download file';
-                downloadIcon.onmouseenter = () => {
-                    downloadIcon.style.background = '#3b82f6';
-                    downloadIcon.style.transform = 'scale(1.2)';
+                // Context menu button (⋮)
+                const menuButton = document.createElement('span');
+                menuButton.innerHTML = '⋮';
+                menuButton.style.cursor = 'pointer';
+                menuButton.style.marginLeft = '8px';
+                menuButton.style.fontSize = '20px';
+                menuButton.style.fontWeight = 'bold';
+                menuButton.style.padding = '4px 8px';
+                menuButton.style.borderRadius = '4px';
+                menuButton.style.transition = 'all 0.2s ease';
+                menuButton.style.userSelect = 'none';
+                menuButton.title = 'File actions';
+                menuButton.onmouseenter = () => {
+                    menuButton.style.background = '#374151';
                 };
-                downloadIcon.onmouseleave = () => {
-                    downloadIcon.style.background = 'transparent';
-                    downloadIcon.style.transform = 'scale(1)';
-                };
-                downloadIcon.onclick = (e) => {
-                    e.stopPropagation();
-                    downloadProjectFile(filename);
+                menuButton.onmouseleave = () => {
+                    menuButton.style.background = 'transparent';
                 };
 
-                // Add rename button
-                const renameIcon = document.createElement('span');
-                renameIcon.innerHTML = '✏️';
-                renameIcon.style.cursor = 'pointer';
-                renameIcon.style.marginLeft = '4px';
-                renameIcon.style.fontSize = '16px';
-                renameIcon.style.padding = '4px 6px';
-                renameIcon.style.borderRadius = '4px';
-                renameIcon.style.transition = 'all 0.2s ease';
-                renameIcon.title = 'Rename file';
-                renameIcon.onmouseenter = () => {
-                    renameIcon.style.background = '#f59e0b';
-                    renameIcon.style.transform = 'scale(1.2)';
-                };
-                renameIcon.onmouseleave = () => {
-                    renameIcon.style.background = 'transparent';
-                    renameIcon.style.transform = 'scale(1)';
-                };
-                renameIcon.onclick = (e) => {
+                // Create dropdown menu
+                const dropdownMenu = document.createElement('div');
+                dropdownMenu.style.position = 'absolute';
+                dropdownMenu.style.right = '8px';
+                dropdownMenu.style.marginTop = '4px';
+                dropdownMenu.style.background = '#1f2937';
+                dropdownMenu.style.border = '1px solid #374151';
+                dropdownMenu.style.borderRadius = '6px';
+                dropdownMenu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+                dropdownMenu.style.minWidth = '140px';
+                dropdownMenu.style.zIndex = '1000';
+                dropdownMenu.style.display = 'none';
+
+                // Menu items
+                const menuItems = [
+                    { icon: '💾', text: 'Download', color: '#3b82f6', action: () => downloadProjectFile(filename) },
+                    { icon: '✏️', text: 'Rename', color: '#f59e0b', action: () => renameFileIcon(filename) },
+                    { icon: '🗑️', text: 'Delete', color: '#ef4444', action: () => deleteProjectFile(filename) }
+                ];
+
+                menuItems.forEach(menuItem => {
+                    const menuItemDiv = document.createElement('div');
+                    menuItemDiv.style.padding = '8px 12px';
+                    menuItemDiv.style.cursor = 'pointer';
+                    menuItemDiv.style.display = 'flex';
+                    menuItemDiv.style.alignItems = 'center';
+                    menuItemDiv.style.gap = '8px';
+                    menuItemDiv.style.fontSize = '14px';
+                    menuItemDiv.style.color = '#e5e7eb';
+                    menuItemDiv.style.transition = 'background 0.15s ease';
+
+                    const icon = document.createElement('span');
+                    icon.innerHTML = menuItem.icon;
+                    icon.style.fontSize = '16px';
+
+                    const text = document.createElement('span');
+                    text.textContent = menuItem.text;
+
+                    menuItemDiv.appendChild(icon);
+                    menuItemDiv.appendChild(text);
+
+                    menuItemDiv.onmouseenter = () => {
+                        menuItemDiv.style.background = menuItem.color + '20';
+                    };
+                    menuItemDiv.onmouseleave = () => {
+                        menuItemDiv.style.background = 'transparent';
+                    };
+                    menuItemDiv.onclick = (e) => {
+                        e.stopPropagation();
+                        dropdownMenu.style.display = 'none';
+                        menuItem.action();
+                    };
+
+                    dropdownMenu.appendChild(menuItemDiv);
+                });
+
+                // Toggle dropdown on button click
+                menuButton.onclick = (e) => {
                     e.stopPropagation();
-                    renameFileIcon(filename);
+                    const isVisible = dropdownMenu.style.display === 'block';
+
+                    // Close all other dropdowns first
+                    document.querySelectorAll('[data-dropdown-menu]').forEach(menu => {
+                        menu.style.display = 'none';
+                    });
+
+                    dropdownMenu.style.display = isVisible ? 'none' : 'block';
                 };
 
-                // Add delete button
-                const deleteIcon = document.createElement('span');
-                deleteIcon.innerHTML = '🗑️';
-                deleteIcon.style.cursor = 'pointer';
-                deleteIcon.style.marginLeft = '4px';
-                deleteIcon.style.fontSize = '16px';
-                deleteIcon.style.padding = '4px 6px';
-                deleteIcon.style.borderRadius = '4px';
-                deleteIcon.style.transition = 'all 0.2s ease';
-                deleteIcon.title = 'Delete file from project';
-                deleteIcon.onmouseenter = () => {
-                    deleteIcon.style.background = '#ef4444';
-                    deleteIcon.style.transform = 'scale(1.2)';
-                };
-                deleteIcon.onmouseleave = () => {
-                    deleteIcon.style.background = 'transparent';
-                    deleteIcon.style.transform = 'scale(1)';
-                };
-                deleteIcon.onclick = (e) => {
-                    e.stopPropagation();
-                    deleteProjectFile(filename);
-                };
+                dropdownMenu.setAttribute('data-dropdown-menu', 'true');
+
+                // Position relative container for dropdown
+                itemContainer.style.position = 'relative';
 
                 itemContainer.appendChild(fileLabel);
-                itemContainer.appendChild(downloadIcon);
-                itemContainer.appendChild(renameIcon);
-                itemContainer.appendChild(deleteIcon);
+                itemContainer.appendChild(menuButton);
+                itemContainer.appendChild(dropdownMenu);
 
                 item.className = 'file-tree-item';
                 if (filename === currentFile) {
@@ -2291,9 +2328,9 @@
                         for (let i = 0; i < 16; i++) {
                             this.reader.readBits(8);
                         }
-                        console.log('[DEBUG] Detected EXTENDED format .REL file (Linkstor80)');
+                        if (DEBUG_MODE) console.log('[DEBUG] Detected EXTENDED format .REL file (Linkstor80)');
                     } else {
-                        console.log('[DEBUG] Detected STANDARD format .REL file (LINK-80)');
+                        if (DEBUG_MODE) console.log('[DEBUG] Detected STANDARD format .REL file (LINK-80)');
                     }
                 }
             }
@@ -2378,9 +2415,9 @@
                         {
                             const addressType = this.reader.readBits(2);
                             const location = this.reader.readBits(16);
-                            console.log(`[DEBUG] External ref: addressType=${addressType}, location=0x${location.toString(16)}`);
+                            if (DEBUG_MODE) console.log(`[DEBUG] External ref: addressType=${addressType}, location=0x${location.toString(16)}`);
                             const symbolName = this.readSymbolName();
-                            console.log(`[DEBUG] External ref symbol: "${symbolName}"`);
+                            if (DEBUG_MODE) console.log(`[DEBUG] External ref symbol: "${symbolName}"`);
                             this.module.externalRefs.push({
                                 symbol: symbolName,
                                 location: location,
@@ -2441,7 +2478,7 @@
                         break;
 
                     case 0x0F: // End File
-                        console.log('[DEBUG] End of file marker reached');
+                        if (DEBUG_MODE) console.log('[DEBUG] End of file marker reached');
                         this.endOfFile = true; // Signal to stop parsing
                         return; // Stop parsing
 
@@ -2454,7 +2491,7 @@
 
             readSymbolName() {
                 const lengthField = this.reader.readBits(3);
-                console.log(`[DEBUG] Symbol length field: ${lengthField}`);
+                if (DEBUG_MODE) console.log(`[DEBUG] Symbol length field: ${lengthField}`);
                 if (lengthField === null) return '';
 
                 let actualLength = lengthField;
@@ -2463,7 +2500,7 @@
                 if (lengthField === 0x07) {
                     // Peek at next byte to see if it's FFh (extended format escape)
                     const escapeByte = this.reader.readBits(8);
-                    console.log(`[DEBUG] Potential extended format escape byte: 0x${escapeByte?.toString(16)}`);
+                    if (DEBUG_MODE) console.log(`[DEBUG] Potential extended format escape byte: 0x${escapeByte?.toString(16)}`);
 
                     if (escapeByte === 0xFF) {
                         // Extended format: Read actual length
@@ -2477,7 +2514,7 @@
                         } else {
                             actualLength = len1;
                         }
-                        console.log(`[DEBUG] Extended format length: ${actualLength}`);
+                        if (DEBUG_MODE) console.log(`[DEBUG] Extended format length: ${actualLength}`);
                     } else {
                         // False alarm - it's actually a 7-character standard name
                         // The escapeByte is the first character
@@ -2488,7 +2525,7 @@
                                 name += String.fromCharCode(charCode);
                             }
                         }
-                        console.log(`[DEBUG] Standard 7-char symbol: "${name}"`);
+                        if (DEBUG_MODE) console.log(`[DEBUG] Standard 7-char symbol: "${name}"`);
                         return name.replace(/\0/g, '').trim(); // Clean up null chars
                     }
                 }
@@ -2512,7 +2549,7 @@
                     }
                 }
                 const formatType = lengthField === 0x07 ? 'EXTENDED' : 'STANDARD';
-                console.log(`[DEBUG] Symbol (${formatType}): [${charCodes.join(', ')}] => "${name}"`);
+                if (DEBUG_MODE) console.log(`[DEBUG] Symbol (${formatType}): [${charCodes.join(', ')}] => "${name}"`);
                 return name;
             }
         }
@@ -2637,8 +2674,8 @@
 
                 // Resolve external references
                 for (const extRef of module.externalRefs) {
-                    console.log(`[DEBUG LINKER] Resolving external ref: "${extRef.symbol}" in module ${module.name}`);
-                    console.log(`[DEBUG LINKER] Symbol table keys:`, Object.keys(this.symbolTable));
+                    if (DEBUG_MODE) console.log(`[DEBUG LINKER] Resolving external ref: "${extRef.symbol}" in module ${module.name}`);
+                    if (DEBUG_MODE) console.log(`[DEBUG LINKER] Symbol table keys:`, Object.keys(this.symbolTable));
                     const symbol = this.symbolTable[extRef.symbol];
 
                     if (!symbol) {
@@ -4186,7 +4223,7 @@
             generateListingFile() {
                 let output = '';
 
-                console.log(`DEBUG: generateListingFile() called, sourceLines.length = ${this.sourceLines.length}, listingLines.length = ${this.listingLines.length}`);
+                if (DEBUG_MODE) console.log(`DEBUG: generateListingFile() called, sourceLines.length = ${this.sourceLines.length}, listingLines.length = ${this.listingLines.length}`);
 
                 // Create a map of line numbers to listing entries
                 const listingMap = {};
@@ -4912,15 +4949,15 @@
                     projectFiles[outputFilename] = binary.slice(0);
                     const formatType = outputMode === 'rel-extended' ? 'Extended format' : 'LINK-80 format';
                     log(`Added ${outputFilename} to project files (${formatType})`, 'success');
-                    console.log(`[DEBUG] Saved .REL to project: ${outputFilename}, size: ${binary.length} bytes`);
+                    if (DEBUG_MODE) console.log(`[DEBUG] Saved .REL to project: ${outputFilename}, size: ${binary.length} bytes`);
 
                     // Verify the file was added correctly by trying to read it back
                     if (projectFiles[outputFilename]) {
-                        console.log(`[DEBUG] Verification: File ${outputFilename} exists in project, size: ${projectFiles[outputFilename].length}`);
+                        if (DEBUG_MODE) console.log(`[DEBUG] Verification: File ${outputFilename} exists in project, size: ${projectFiles[outputFilename].length}`);
 
                         // Verify the data is intact by checking first few bytes
                         const first10 = Array.from(projectFiles[outputFilename].slice(0, 10));
-                        console.log(`[DEBUG] First 10 bytes:`, first10);
+                        if (DEBUG_MODE) console.log(`[DEBUG] First 10 bytes:`, first10);
                     } else {
                         console.error(`[DEBUG] ERROR: File ${outputFilename} was not added to project!`);
                     }
@@ -5267,8 +5304,8 @@
                 // Then, load explicit .REL files - these are always included
                 for (const relFile of relFiles) {
                     const relData = projectFiles[relFile];
-                    console.log(`[DEBUG] Loading ${relFile}, type: ${relData.constructor.name}, length: ${relData.length}`);
-                    console.log(`[DEBUG] First 20 bytes:`, Array.from(relData.slice(0, 20)));
+                    if (DEBUG_MODE) console.log(`[DEBUG] Loading ${relFile}, type: ${relData.constructor.name}, length: ${relData.length}`);
+                    if (DEBUG_MODE) console.log(`[DEBUG] First 20 bytes:`, Array.from(relData.slice(0, 20)));
 
                     // Create a copy to avoid parser modifying the original data
                     const parser = new RelFileParser(relData.slice(0));
