@@ -266,13 +266,20 @@ db $aa,$55              ; Signature
 dw 0,0,0,0
 dw Start
 
-rst_8:  reti : nop
-rst_10: reti : nop
-rst_18: reti : nop
-rst_20: reti : nop
-rst_28: reti : nop
-rst_30: reti : nop
-rst_38: reti : nop
+rst_8:  reti
+        nop
+rst_10: reti
+        nop
+rst_18: reti
+        nop
+rst_20: reti
+        nop
+rst_28: reti
+        nop
+rst_30: reti
+        nop
+rst_38: reti
+        nop
 jp Nmi
 
 db "HELLO WORLD!/PRINT ON SCREEN/2010"
