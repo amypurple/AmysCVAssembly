@@ -656,6 +656,17 @@
             }
         });
 
+        // Close context menu dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdowns = document.querySelectorAll('[data-dropdown-menu]');
+            dropdowns.forEach(dropdown => {
+                const menuButton = dropdown.previousElementSibling;
+                if (!dropdown.contains(e.target) && !menuButton.contains(e.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+        });
+
         // Sync mobile buttons with desktop buttons
         compileBtnMobile.addEventListener('click', () => {
             compileBtn.click();
@@ -858,81 +869,107 @@
                 fileLabel.textContent = filename;
                 fileLabel.style.flex = '1';
                 fileLabel.style.cursor = 'pointer';
+                fileLabel.style.overflow = 'hidden';
+                fileLabel.style.textOverflow = 'ellipsis';
+                fileLabel.style.whiteSpace = 'nowrap';
                 fileLabel.onclick = () => openFile(filename);
 
-                // Add download button
-                const downloadIcon = document.createElement('span');
-                downloadIcon.innerHTML = '💾';
-                downloadIcon.style.cursor = 'pointer';
-                downloadIcon.style.marginLeft = '8px';
-                downloadIcon.style.fontSize = '16px';
-                downloadIcon.style.padding = '4px 6px';
-                downloadIcon.style.borderRadius = '4px';
-                downloadIcon.style.transition = 'all 0.2s ease';
-                downloadIcon.title = 'Download file';
-                downloadIcon.onmouseenter = () => {
-                    downloadIcon.style.background = '#3b82f6';
-                    downloadIcon.style.transform = 'scale(1.2)';
+                // Context menu button (⋮)
+                const menuButton = document.createElement('span');
+                menuButton.innerHTML = '⋮';
+                menuButton.style.cursor = 'pointer';
+                menuButton.style.marginLeft = '8px';
+                menuButton.style.fontSize = '20px';
+                menuButton.style.fontWeight = 'bold';
+                menuButton.style.padding = '4px 8px';
+                menuButton.style.borderRadius = '4px';
+                menuButton.style.transition = 'all 0.2s ease';
+                menuButton.style.userSelect = 'none';
+                menuButton.title = 'File actions';
+                menuButton.onmouseenter = () => {
+                    menuButton.style.background = '#374151';
                 };
-                downloadIcon.onmouseleave = () => {
-                    downloadIcon.style.background = 'transparent';
-                    downloadIcon.style.transform = 'scale(1)';
-                };
-                downloadIcon.onclick = (e) => {
-                    e.stopPropagation();
-                    downloadProjectFile(filename);
+                menuButton.onmouseleave = () => {
+                    menuButton.style.background = 'transparent';
                 };
 
-                // Add rename button
-                const renameIcon = document.createElement('span');
-                renameIcon.innerHTML = '✏️';
-                renameIcon.style.cursor = 'pointer';
-                renameIcon.style.marginLeft = '4px';
-                renameIcon.style.fontSize = '16px';
-                renameIcon.style.padding = '4px 6px';
-                renameIcon.style.borderRadius = '4px';
-                renameIcon.style.transition = 'all 0.2s ease';
-                renameIcon.title = 'Rename file';
-                renameIcon.onmouseenter = () => {
-                    renameIcon.style.background = '#f59e0b';
-                    renameIcon.style.transform = 'scale(1.2)';
-                };
-                renameIcon.onmouseleave = () => {
-                    renameIcon.style.background = 'transparent';
-                    renameIcon.style.transform = 'scale(1)';
-                };
-                renameIcon.onclick = (e) => {
+                // Create dropdown menu
+                const dropdownMenu = document.createElement('div');
+                dropdownMenu.style.position = 'absolute';
+                dropdownMenu.style.right = '8px';
+                dropdownMenu.style.marginTop = '4px';
+                dropdownMenu.style.background = '#1f2937';
+                dropdownMenu.style.border = '1px solid #374151';
+                dropdownMenu.style.borderRadius = '6px';
+                dropdownMenu.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+                dropdownMenu.style.minWidth = '140px';
+                dropdownMenu.style.zIndex = '1000';
+                dropdownMenu.style.display = 'none';
+
+                // Menu items
+                const menuItems = [
+                    { icon: '💾', text: 'Download', color: '#3b82f6', action: () => downloadProjectFile(filename) },
+                    { icon: '✏️', text: 'Rename', color: '#f59e0b', action: () => renameFile(filename) },
+                    { icon: '🗑️', text: 'Delete', color: '#ef4444', action: () => deleteProjectFile(filename) }
+                ];
+
+                menuItems.forEach(menuItem => {
+                    const menuItemDiv = document.createElement('div');
+                    menuItemDiv.style.padding = '8px 12px';
+                    menuItemDiv.style.cursor = 'pointer';
+                    menuItemDiv.style.display = 'flex';
+                    menuItemDiv.style.alignItems = 'center';
+                    menuItemDiv.style.gap = '8px';
+                    menuItemDiv.style.fontSize = '14px';
+                    menuItemDiv.style.color = '#e5e7eb';
+                    menuItemDiv.style.transition = 'background 0.15s ease';
+
+                    const icon = document.createElement('span');
+                    icon.innerHTML = menuItem.icon;
+                    icon.style.fontSize = '16px';
+
+                    const text = document.createElement('span');
+                    text.textContent = menuItem.text;
+
+                    menuItemDiv.appendChild(icon);
+                    menuItemDiv.appendChild(text);
+
+                    menuItemDiv.onmouseenter = () => {
+                        menuItemDiv.style.background = menuItem.color + '20';
+                    };
+                    menuItemDiv.onmouseleave = () => {
+                        menuItemDiv.style.background = 'transparent';
+                    };
+                    menuItemDiv.onclick = (e) => {
+                        e.stopPropagation();
+                        dropdownMenu.style.display = 'none';
+                        menuItem.action();
+                    };
+
+                    dropdownMenu.appendChild(menuItemDiv);
+                });
+
+                // Toggle dropdown on button click
+                menuButton.onclick = (e) => {
                     e.stopPropagation();
-                    renameFile(filename);
+                    const isVisible = dropdownMenu.style.display === 'block';
+
+                    // Close all other dropdowns first
+                    document.querySelectorAll('[data-dropdown-menu]').forEach(menu => {
+                        menu.style.display = 'none';
+                    });
+
+                    dropdownMenu.style.display = isVisible ? 'none' : 'block';
                 };
 
-                // Add delete button
-                const deleteIcon = document.createElement('span');
-                deleteIcon.innerHTML = '🗑️';
-                deleteIcon.style.cursor = 'pointer';
-                deleteIcon.style.marginLeft = '4px';
-                deleteIcon.style.fontSize = '16px';
-                deleteIcon.style.padding = '4px 6px';
-                deleteIcon.style.borderRadius = '4px';
-                deleteIcon.style.transition = 'all 0.2s ease';
-                deleteIcon.title = 'Delete file from project';
-                deleteIcon.onmouseenter = () => {
-                    deleteIcon.style.background = '#ef4444';
-                    deleteIcon.style.transform = 'scale(1.2)';
-                };
-                deleteIcon.onmouseleave = () => {
-                    deleteIcon.style.background = 'transparent';
-                    deleteIcon.style.transform = 'scale(1)';
-                };
-                deleteIcon.onclick = (e) => {
-                    e.stopPropagation();
-                    deleteProjectFile(filename);
-                };
+                dropdownMenu.setAttribute('data-dropdown-menu', 'true');
+
+                // Position relative container for dropdown
+                itemContainer.style.position = 'relative';
 
                 itemContainer.appendChild(fileLabel);
-                itemContainer.appendChild(downloadIcon);
-                itemContainer.appendChild(renameIcon);
-                itemContainer.appendChild(deleteIcon);
+                itemContainer.appendChild(menuButton);
+                itemContainer.appendChild(dropdownMenu);
 
                 item.className = 'file-tree-item';
                 if (filename === currentFile) {
@@ -3115,184 +3152,6 @@
         log('Features: Direct binary output, no linker required', 'info');
         log('Supported files: .asm, .z80, .s (also .zip, .gz archives)', 'info');
         log('Drop your files to begin.', 'info');
-
-        /*
-         * ============================================================================
-         * ZMAC COMPATIBILITY TEST EXAMPLES
-         * ============================================================================
-         *
-         * Example 1: Basic Z80 Assembly with Labels and Jumps
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   START:
-         *       ld a, $FF          ; Load immediate hex
-         *       ld hl, BUFFER      ; Load address of buffer
-         *       call CLEAR         ; Call subroutine
-         *       jp START           ; Infinite loop
-         *
-         *   CLEAR:
-         *       xor a              ; A = 0
-         *       ld (hl), a         ; Clear byte
-         *       ret
-         *
-         *   BUFFER: ds 256         ; Reserve 256 bytes
-         *
-         * Example 2: Using zmac Directives (DEFM, DEFB, DEFW)
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   HEADER:
-         *       defb $AA, $55               ; Header bytes
-         *       defm "GAME TITLE", 0        ; String with null terminator
-         *       defw START                  ; 16-bit address
-         *
-         *   START:
-         *       ld hl, MESSAGE
-         *       call PRINT
-         *       ret
-         *
-         *   MESSAGE:
-         *       ascii "HELLO WORLD!"        ; ASCII string (synonym for DB)
-         *       db 13, 10, 0                ; CR, LF, null
-         *
-         * Example 3: Macros and Conditionals
-         * ----------------------------------------------------------------------------
-         *   DEBUG equ 1
-         *
-         *   ; Macro definition
-         *   DELAY macro count
-         *       ld b, count
-         *   .loop:
-         *       djnz .loop
-         *   endm
-         *
-         *   org $8000
-         *
-         *   START:
-         *       DELAY 100                   ; Expand macro with parameter
-         *
-         *       if DEBUG
-         *           ld a, $FF               ; Debug code
-         *       else
-         *           xor a                   ; Release code
-         *       endif
-         *
-         *       ret
-         *
-         * Example 4: IX/IY Indexed Addressing
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   OFFSET equ 5
-         *
-         *   START:
-         *       ld ix, BUFFER
-         *       ld a, (ix+0)               ; Read from IX+0
-         *       ld (ix+OFFSET), a          ; Write to IX+OFFSET
-         *       ld b, (iy-10)              ; Read from IY-10
-         *       ret
-         *
-         *   BUFFER: ds 256
-         *
-         * Example 5: Number Formats (All Supported)
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   HEX_STYLES:
-         *       db $FF                      ; Dollar prefix
-         *       db 0xFF                     ; 0x prefix
-         *       db 0FFh                     ; Suffix h
-         *
-         *   BINARY_STYLES:
-         *       db %11111111                ; Percent prefix
-         *       db 0b11111111               ; 0b prefix
-         *       db 11111111b                ; Suffix b
-         *
-         *   OCTAL_STYLES:
-         *       db @377                     ; At sign prefix
-         *       db 0377                     ; Leading zero
-         *       db 377o                     ; Suffix o
-         *
-         *   DECIMAL:
-         *       db 255                      ; Plain decimal
-         *       db 255d                     ; Suffix d (optional)
-         *
-         * Example 6: ColecoVision ROM Header
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   ; ColecoVision header
-         *   db $AA, $55                     ; Cart header (bypasses title screen)
-         *   ; or: db $55, $AA               ; (shows default CV title screen)
-         *
-         *   dw 0, 0, 0, 0, 0, 0, 0          ; Reserved
-         *   dw START                        ; Start address
-         *   dw 0, 0, 0, 0, 0                ; RST handlers
-         *
-         *   ; Game title at $8024 (format: "LINE3/LINE2/YEAR")
-         *   org $8024
-         *   defm "MY GAME/BY ME/2024", 0
-         *
-         *   org $8100
-         *   START:
-         *       di                          ; Disable interrupts
-         *       ld sp, $7400                ; Set stack
-         *       jp MAIN
-         *
-         *   MAIN:
-         *       ; Your game code here
-         *       jp MAIN
-         *
-         * Example 7: Relative Jumps and DJNZ
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   START:
-         *       ld b, 10
-         *   LOOP:
-         *       nop
-         *       djnz LOOP                   ; Decrement B and jump if not zero
-         *
-         *       ld a, 5
-         *       cp 10
-         *       jr z, EQUAL                 ; Jump if zero (relative)
-         *       jr nc, GREATER              ; Jump if no carry
-         *       jr LESS
-         *
-         *   EQUAL:
-         *       xor a
-         *       ret
-         *
-         *   GREATER:
-         *       ld a, 1
-         *       ret
-         *
-         *   LESS:
-         *       ld a, $FF
-         *       ret
-         *
-         * Example 8: BIT/RES/SET Instructions
-         * ----------------------------------------------------------------------------
-         *   org $8000
-         *
-         *   START:
-         *       ld a, %10101010
-         *
-         *       bit 0, a                    ; Test bit 0
-         *       jr z, BIT_CLEAR
-         *
-         *       set 1, a                    ; Set bit 1
-         *       res 7, a                    ; Reset bit 7
-         *
-         *       ret
-         *
-         *   BIT_CLEAR:
-         *       set 0, a
-         *       ret
-         *
-         * ============================================================================
-         */
 
     </script>
 
