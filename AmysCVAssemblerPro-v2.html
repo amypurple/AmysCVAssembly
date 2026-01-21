@@ -1427,6 +1427,72 @@
                     explanation: 'JR $+2 jumps to next instruction - a 2-byte NOP.',
                     savings: '2 bytes, 12 T-states',
                     warning: 'Unless used for timing purposes.'
+                },
+                {
+                    name: 'XOR $FF to CPL',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(xor|XOR)\s+(255|0xff|0FFh|\$ff|%11111111)\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'cpl',
+                    replacement: (line) => line.replace(/\b(xor|XOR)\s+(255|0xff|0FFh|\$ff|%11111111)\b/i, 'cpl'),
+                    explanation: 'XOR $FF (2 bytes) can be replaced with CPL (1 byte). Both invert all bits in A.',
+                    savings: '1 byte, 3 T-states'
+                },
+                {
+                    name: 'SLA A to ADD A,A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(sla|SLA)\s+[aA]\s*(?:;.*)?$/.test(line),
+                    suggestion: 'add a,a',
+                    replacement: (line) => line.replace(/\b(sla|SLA)\s+[aA]\b/, 'add a,a'),
+                    explanation: 'SLA A (2 bytes, 8 T-states) can be replaced with ADD A,A (1 byte, 4 T-states). Both shift A left.',
+                    savings: '1 byte, 4 T-states'
+                },
+                {
+                    name: 'SLA L; RL H to ADD HL,HL',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(sla|SLA)\s+[lL]\s*(?:;.*)?$/.test(line),
+                    suggestion: 'add hl,hl (with next RL H)',
+                    explanation: 'SLA L followed by RL H (4 bytes) can be replaced with ADD HL,HL (1 byte). Both shift HL left.',
+                    savings: '3 bytes, 5 T-states'
+                },
+                {
+                    name: 'CP 1 to DEC A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(cp|CP)\s+1\s*(?:;.*)?$/.test(line),
+                    suggestion: 'dec a',
+                    explanation: 'CP 1 (2 bytes) can often be replaced with DEC A (1 byte) if you only need Z flag and can modify A.',
+                    savings: '1 byte, 3 T-states',
+                    warning: 'Only if A can be modified. DEC A changes A, CP 1 does not.'
+                },
+                {
+                    name: 'JP to label (consider JR)',
+                    category: 'peephole',
+                    detect: (line) => {
+                        // Match JP with label (not JP (HL), JP (IX), etc.)
+                        // Also match conditional JP with supported conditions (Z, NZ, C, NC)
+                        const match = line.match(/^\s*(jp|JP)\s+(?:(z|nz|c|nc)\s*,\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
+                        return match !== null;
+                    },
+                    suggestion: 'jr (if in range)',
+                    explanation: 'JP (3 bytes) can be JR (2 bytes) if target is within -126 to +129 bytes. JR only supports Z, NZ, C, NC conditions.',
+                    savings: '1 byte per conversion',
+                    warning: 'Only works if target is in range. Use auto-optimizer for automatic conversion.'
+                },
+                {
+                    name: 'DEC B; JP NZ to DJNZ',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(dec|DEC)\s+[bB]\s*(?:;.*)?$/.test(line),
+                    suggestion: 'djnz (with following JP NZ)',
+                    explanation: 'DEC B followed by JP NZ (4 bytes) can be DJNZ (2 bytes). Both decrement B and loop if not zero.',
+                    savings: '2 bytes, 3 T-states'
+                },
+                {
+                    name: 'LD (HL),0 via XOR A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(ld|LD)\s+\(\s*(hl|HL)\s*\)\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'xor a; ld (hl),a',
+                    explanation: 'LD (HL),0 (2 bytes, 10 T-states). If you need to store zero to multiple locations, XOR A once then LD (HL),A (1 byte, 7 T-states each) is faster.',
+                    savings: 'Faster for multiple stores',
+                    warning: 'Only beneficial if storing zero to multiple locations.'
                 }
             ],
             warnings: [
@@ -1492,6 +1558,57 @@
                 suggestion: 'Remove first LD',
                 explanation: 'First LD is immediately overwritten by second LD to the same register.',
                 savings: '2 bytes, 7 T-states'
+            },
+            {
+                name: 'CALL/RET to JP (tail call)',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const call = line1.match(/^\s*(call|CALL)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
+                    const ret = line2.match(/^\s*(ret|RET)\s*(?:;.*)?$/i);
+                    return call && ret;
+                },
+                suggestion: 'jp target',
+                explanation: 'CALL followed by RET (4 bytes, 27 T-states) can be JP (3 bytes, 10 T-states). This is tail call optimization.',
+                savings: '1 byte, 17 T-states',
+                multiLineReplacement: (line1, line2) => {
+                    return line1.replace(/\b(call|CALL)\b/i, 'jp') + '\n';
+                }
+            },
+            {
+                name: 'DEC B; JP NZ to DJNZ',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const dec = line1.match(/^\s*(dec|DEC)\s+[bB]\s*(?:;.*)?$/i);
+                    const jp = line2.match(/^\s*(jp|JP)\s+(nz|NZ)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
+                    return dec && jp;
+                },
+                suggestion: 'djnz label',
+                explanation: 'DEC B followed by JP NZ (4 bytes) can be DJNZ (2 bytes). Both decrement B and loop if not zero.',
+                savings: '2 bytes, 3 T-states',
+                multiLineReplacement: (line1, line2) => {
+                    const match = line2.match(/^\s*(jp|JP)\s+(nz|NZ)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
+                    if (match) {
+                        const indent = line1.match(/^(\s*)/)[1];
+                        return indent + 'djnz ' + match[3] + '\n';
+                    }
+                    return line1 + '\n' + line2 + '\n';
+                }
+            },
+            {
+                name: 'SLA L; RL H to ADD HL,HL',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const sla = line1.match(/^\s*(sla|SLA)\s+[lL]\s*(?:;.*)?$/i);
+                    const rl = line2.match(/^\s*(rl|RL)\s+[hH]\s*(?:;.*)?$/i);
+                    return sla && rl;
+                },
+                suggestion: 'add hl,hl',
+                explanation: 'SLA L followed by RL H (4 bytes, 16 T-states) can be ADD HL,HL (1 byte, 11 T-states). Both shift HL left by 1.',
+                savings: '3 bytes, 5 T-states',
+                multiLineReplacement: (line1, line2) => {
+                    const indent = line1.match(/^(\s*)/)[1];
+                    return indent + 'add hl,hl\n';
+                }
             }
         ];
 
@@ -1744,7 +1861,95 @@
                 }
             }
 
+            // Check for magic numbers (repeated immediate values)
+            if (optimizerConfig.warnings) {
+                const magicNumbers = detectMagicNumbers(code);
+                magicNumbers.forEach(mn => {
+                    suggestions.push({
+                        name: 'Magic number',
+                        category: 'warnings',
+                        line: mn.firstLine,
+                        original: `Value ${mn.display} appears ${mn.count} times`,
+                        suggestion: `Define as EQU constant`,
+                        explanation: `The value ${mn.display} is used ${mn.count} times (lines: ${mn.lines.join(', ')}). Consider defining it as a named constant with EQU for better maintainability.`,
+                        savings: 'Code maintainability'
+                    });
+                });
+            }
+
             return suggestions;
+        }
+
+        // Detect repeated magic numbers in code
+        function detectMagicNumbers(code) {
+            const lines = code.split('\n');
+            const numberUsage = new Map(); // value -> { count, lines[], display }
+
+            // Common values to ignore (0, 1, 255, etc. are often intentional)
+            const ignoreValues = new Set([0, 1, 2, 255, 256, 0xFF, 0x00, 0x01, 0x02]);
+
+            lines.forEach((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith(';')) return;
+                // Skip EQU/SET definitions (they ARE the constants)
+                if (/^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*:?\s*(equ|set|=)\s*/i.test(trimmed)) return;
+                // Skip directives like ORG, DS (these need specific values)
+                if (/^\s*\.?(org|ds|defs|align)\s+/i.test(trimmed)) return;
+
+                // Find immediate values in instructions
+                // Match hex: $xx, 0xXX, XXh
+                // Match decimal: plain numbers
+                // Match binary: %xxxxxxxx, 0bxxxxxxxx
+                const patterns = [
+                    /\b0x([0-9a-fA-F]+)\b/g,           // 0xFF
+                    /\$([0-9a-fA-F]+)\b/g,             // $FF
+                    /\b([0-9a-fA-F]+)h\b/gi,           // FFh
+                    /\b(\d+)\b/g,                       // decimal
+                ];
+
+                patterns.forEach(pattern => {
+                    let match;
+                    while ((match = pattern.exec(line)) !== null) {
+                        let value;
+                        const matchStr = match[0];
+
+                        // Parse to number
+                        if (matchStr.startsWith('0x') || matchStr.startsWith('0X')) {
+                            value = parseInt(matchStr.slice(2), 16);
+                        } else if (matchStr.startsWith('$')) {
+                            value = parseInt(matchStr.slice(1), 16);
+                        } else if (matchStr.toLowerCase().endsWith('h')) {
+                            value = parseInt(matchStr.slice(0, -1), 16);
+                        } else {
+                            value = parseInt(matchStr, 10);
+                        }
+
+                        // Skip common values and small numbers
+                        if (ignoreValues.has(value) || value < 3 || value > 65535) return;
+                        // Skip if it looks like an address (very large numbers)
+                        if (value >= 0x8000 && value <= 0xFFFF) return;
+
+                        if (!numberUsage.has(value)) {
+                            numberUsage.set(value, { count: 0, lines: [], display: matchStr, firstLine: index + 1 });
+                        }
+                        const usage = numberUsage.get(value);
+                        usage.count++;
+                        if (!usage.lines.includes(index + 1)) {
+                            usage.lines.push(index + 1);
+                        }
+                    }
+                });
+            });
+
+            // Return values that appear 3+ times on different lines
+            const results = [];
+            numberUsage.forEach((usage, value) => {
+                if (usage.lines.length >= 3) {
+                    results.push(usage);
+                }
+            });
+
+            return results;
         }
 
         function renderSuggestions(suggestions) {
