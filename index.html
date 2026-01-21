@@ -57,19 +57,36 @@
         </div>
 
         <!-- Version 0 -->
-        <div class="mb-6">
+        <div class="mb-6 border-t border-gray-800 pt-6">
             <div class="flex items-center justify-center gap-3 mb-3">
                 <h2 class="text-lg font-bold text-gray-400">Version 0</h2>
                 <span class="text-xs bg-gray-600 text-white px-2 py-0.5 rounded-full">Legacy</span>
             </div>
-            <div class="text-center text-xs text-gray-500 mb-2">Macros, conditionals, multi-syntax support</div>
-            <div class="grid md:grid-cols-2 gap-3">
-                <a href="AmysCVAssembler-v0.html" class="block w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold py-1.5 px-3 rounded text-center transition">
-                    Open Standard v0
-                </a>
-                <a href="AmysCVAssemblerPro-v0.html" class="block w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold py-1.5 px-3 rounded text-center transition">
-                    Open Pro v0
-                </a>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h3 class="text-blue-400 font-bold text-sm mb-2 text-center">Standard v0</h3>
+                    <ul class="text-[10px] text-gray-400 space-y-1 mb-4">
+                        <li>Direct binary ROM output</li>
+                        <li>No linker required</li>
+                        <li>Multi-syntax support</li>
+                    </ul>
+                    <a href="AmysCVAssembler-v0.html" class="block w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold py-1.5 px-3 rounded text-center transition">
+                        Open Standard v0
+                    </a>
+                </div>
+
+                <div class="bg-gray-800/50 p-4 rounded-lg">
+                    <h3 class="text-purple-400 font-bold text-sm mb-2 text-center">Pro v0</h3>
+                    <ul class="text-[10px] text-gray-400 space-y-1 mb-4">
+                        <li>Relocatable object files (.rel)</li>
+                        <li>Library creation and linking</li>
+                        <li>Multi-module projects</li>
+                    </ul>
+                    <a href="AmysCVAssemblerPro-v0.html" class="block w-full bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold py-1.5 px-3 rounded text-center transition">
+                        Open Pro v0
+                    </a>
+                </div>
             </div>
         </div>
 
