@@ -225,14 +225,10 @@
             <button type="button" id="clear-breakpoints-btn" class="ml-2 text-xs text-red-400 hover:text-red-300 cursor-pointer hidden" title="Clear all breakpoints">
                 Clear All
             </button>
-            <div class="ml-4 flex items-center relative">
-                <label class="flex items-center cursor-pointer">
-                    <input type="checkbox" id="optimizer-toggle" class="mr-2">
-                    <span class="text-sm text-gray-300">⚡ Optimize</span>
-                </label>
-                <button type="button" id="optimizer-config-btn" class="ml-1 text-xs text-gray-400 hover:text-gray-300 cursor-pointer" title="Optimizer settings">⚙️</button>
-                <span class="ml-2 text-xs text-green-400 hidden" id="bytes-saved-display"></span>
-            </div>
+            <!-- Hidden elements for optimizer (controls are in Assistant panel) -->
+            <span class="hidden" id="bytes-saved-display"></span>
+            <input type="checkbox" id="optimizer-toggle" class="hidden">
+            <button id="optimizer-config-btn" class="hidden"></button>
         </div>
 
         <!-- Burger menu (shown on mobile) -->
@@ -321,7 +317,13 @@
             <pre id="symbols-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono hidden"></pre>
             <div id="assistant-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto hidden flex-col">
                 <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
-                    <span class="text-gray-400 text-xs">Optimization Assistant</span>
+                    <div class="flex items-center gap-2">
+                        <label class="flex items-center cursor-pointer text-xs" title="Apply optimizations when compiling">
+                            <input type="checkbox" id="optimizer-toggle-panel" class="mr-1">
+                            <span class="text-gray-300">Optimize on Build</span>
+                        </label>
+                        <button id="optimizer-config-btn-panel" class="text-gray-400 hover:text-gray-200 text-xs" title="Optimizer Settings">⚙️</button>
+                    </div>
                     <div class="flex gap-1">
                         <button id="scan-code-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded">Scan Code</button>
                         <button id="format-code-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded">Format Code</button>
@@ -362,6 +364,13 @@
                     <div>
                         <div class="text-gray-200 font-semibold">RST vector optimization <span class="text-orange-400">(auto-optimizer only)</span></div>
                         <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Converts CALL to RST. May conflict with ROM header.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-inline-routines" class="mt-1 mr-3">
+                    <div>
+                        <div class="text-gray-200 font-semibold">Inline single-call routines <span class="text-orange-400">(auto-optimizer only)</span></div>
+                        <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Inlines routines called once. Iterative - may significantly restructure code. Best with dead code elimination.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
@@ -524,16 +533,30 @@
         // Always show breakpoint gutter
         breakpointCount.classList.remove('hidden');
 
-        // Optimizer toggle
+        // Optimizer toggle (synced between hidden header checkbox and panel checkbox)
         const optimizerToggle = document.getElementById('optimizer-toggle');
+        const optimizerTogglePanel = document.getElementById('optimizer-toggle-panel');
         let optimizerEnabled = localStorage.getItem('optimizerEnabled') === 'true';
         optimizerToggle.checked = optimizerEnabled;
+        optimizerTogglePanel.checked = optimizerEnabled;
+
+        const syncOptimizerToggle = (enabled) => {
+            optimizerEnabled = enabled;
+            optimizerToggle.checked = enabled;
+            optimizerTogglePanel.checked = enabled;
+            localStorage.setItem('optimizerEnabled', enabled);
+            log(`Code optimizer ${enabled ? 'enabled' : 'disabled'}`, 'info');
+        };
+
+        optimizerToggle.addEventListener('change', () => syncOptimizerToggle(optimizerToggle.checked));
+        optimizerTogglePanel.addEventListener('change', () => syncOptimizerToggle(optimizerTogglePanel.checked));
 
         // Optimizer configuration (shared between auto-optimizer and assistant)
         let optimizerConfig = {
             peephole: true,         // All peephole: JP→JR, LD→XOR, redundant ops, etc.
             deadCode: false,        // Auto-optimizer only (disabled by default)
             rstVectors: false,      // Auto-optimizer only (disabled by default)
+            inlineRoutines: false,  // Auto-optimizer only (disabled by default)
             warnings: true,         // Warnings & best practices
             formatting: true,       // Formatting suggestions
             autoScan: true,         // Auto-scan on file open
@@ -545,24 +568,21 @@
             commentCol: 40
         };
 
-        // Load saved config from localStorage
+        // Load saved config from localStorage (merge with defaults to handle new fields)
         const savedConfig = localStorage.getItem('optimizerConfig');
         if (savedConfig) {
             try {
-                optimizerConfig = JSON.parse(savedConfig);
+                const loaded = JSON.parse(savedConfig);
+                // Merge loaded config with defaults (loaded values override defaults)
+                optimizerConfig = { ...optimizerConfig, ...loaded };
             } catch (e) {
                 console.error('Failed to load optimizer config:', e);
             }
         }
 
-        optimizerToggle.addEventListener('change', () => {
-            optimizerEnabled = optimizerToggle.checked;
-            localStorage.setItem('optimizerEnabled', optimizerEnabled);
-            log(`Code optimizer ${optimizerEnabled ? 'enabled' : 'disabled'}`, 'info');
-        });
-
         // Optimizer config modal
         const optimizerConfigBtn = document.getElementById('optimizer-config-btn');
+        const optimizerConfigBtnPanel = document.getElementById('optimizer-config-btn-panel');
         const optimizerConfigModal = document.getElementById('optimizer-config-modal');
         const optimizerConfigClose = document.getElementById('optimizer-config-close');
         const optimizerConfigSave = document.getElementById('optimizer-config-save');
@@ -571,6 +591,7 @@
         const optPeephole = document.getElementById('opt-peephole');
         const optDeadCode = document.getElementById('opt-dead-code');
         const optRstVectors = document.getElementById('opt-rst-vectors');
+        const optInlineRoutines = document.getElementById('opt-inline-routines');
         const optWarnings = document.getElementById('opt-warnings');
         const optFormatting = document.getElementById('opt-formatting');
         const optAutoScan = document.getElementById('opt-auto-scan');
@@ -580,12 +601,13 @@
         const optFormatOperandCol = document.getElementById('opt-format-operand-col');
         const optFormatCommentCol = document.getElementById('opt-format-comment-col');
 
-        // Open modal
-        optimizerConfigBtn.addEventListener('click', () => {
+        // Open modal (from panel button)
+        const openOptimizerModal = () => {
             // Load current config into checkboxes
             optPeephole.checked = optimizerConfig.peephole;
             optDeadCode.checked = optimizerConfig.deadCode;
             optRstVectors.checked = optimizerConfig.rstVectors;
+            optInlineRoutines.checked = optimizerConfig.inlineRoutines;
             optWarnings.checked = optimizerConfig.warnings;
             optFormatting.checked = optimizerConfig.formatting;
             optAutoScan.checked = optimizerConfig.autoScan;
@@ -596,7 +618,10 @@
             optFormatCommentCol.value = optimizerConfig.commentCol;
 
             optimizerConfigModal.classList.remove('hidden');
-        });
+        };
+
+        optimizerConfigBtn.addEventListener('click', openOptimizerModal);
+        optimizerConfigBtnPanel.addEventListener('click', openOptimizerModal);
 
         // Close modal
         const closeModal = () => {
@@ -619,6 +644,7 @@
                 peephole: optPeephole.checked,
                 deadCode: optDeadCode.checked,
                 rstVectors: optRstVectors.checked,
+                inlineRoutines: optInlineRoutines.checked,
                 warnings: optWarnings.checked,
                 formatting: optFormatting.checked,
                 autoScan: optAutoScan.checked,
@@ -1249,13 +1275,15 @@
                     detect: (line) => /^\s*(sla|SLA)\s+[lL]\s*(?:;.*)?$/.test(line),
                     suggestion: 'add hl,hl (with next RL H)',
                     explanation: 'SLA L followed by RL H (4 bytes) can be replaced with ADD HL,HL (1 byte). Both shift HL left.',
-                    savings: '3 bytes, 5 T-states'
+                    savings: '3 bytes, 5 T-states',
+                    noApply: true // Multi-line pattern handled separately
                 },
                 {
                     name: 'CP 1 to DEC A',
                     category: 'peephole',
                     detect: (line) => /^\s*(cp|CP)\s+1\s*(?:;.*)?$/.test(line),
                     suggestion: 'dec a',
+                    replacement: (line) => line.replace(/\b(cp|CP)\s+1\b/, 'dec a'),
                     explanation: 'CP 1 (2 bytes) can often be replaced with DEC A (1 byte) if you only need Z flag and can modify A.',
                     savings: '1 byte, 3 T-states',
                     warning: 'Only if A can be modified. DEC A changes A, CP 1 does not.'
@@ -1270,6 +1298,7 @@
                         return match !== null;
                     },
                     suggestion: 'jr (if in range)',
+                    replacement: (line) => line.replace(/\b(jp|JP)\b/, 'jr'),
                     explanation: 'JP (3 bytes) can be JR (2 bytes) if target is within -126 to +129 bytes. JR only supports Z, NZ, C, NC conditions.',
                     savings: '1 byte per conversion',
                     warning: 'Only works if target is in range. Use auto-optimizer for automatic conversion.'
@@ -1280,7 +1309,8 @@
                     detect: (line) => /^\s*(dec|DEC)\s+[bB]\s*(?:;.*)?$/.test(line),
                     suggestion: 'djnz (with following JP NZ)',
                     explanation: 'DEC B followed by JP NZ (4 bytes) can be DJNZ (2 bytes). Both decrement B and loop if not zero.',
-                    savings: '2 bytes, 3 T-states'
+                    savings: '2 bytes, 3 T-states',
+                    noApply: true // Multi-line pattern handled separately
                 },
                 {
                     name: 'LD (HL),0 via XOR A',
@@ -1289,7 +1319,8 @@
                     suggestion: 'xor a; ld (hl),a',
                     explanation: 'LD (HL),0 (2 bytes, 10 T-states). If you need to store zero to multiple locations, XOR A once then LD (HL),A (1 byte, 7 T-states each) is faster.',
                     savings: 'Faster for multiple stores',
-                    warning: 'Only beneficial if storing zero to multiple locations.'
+                    warning: 'Only beneficial if storing zero to multiple locations.',
+                    noApply: true // This is a hint, not auto-applicable
                 }
             ],
             warnings: [
@@ -1592,13 +1623,81 @@
             const lines = code.split('\n');
             const suggestions = [];
 
+            // Track PC to detect header region ($8000-$8030 approximately)
+            // ColecoVision header: RST vectors ($8000-$801F), NMI ($8021), start ($8024), title string
+            let pc = 0;
+            let inHeaderRegion = false;
+            const HEADER_START = 0x8000;
+            const HEADER_END = 0x8030; // Include title string area
+
+            // Helper to check if line is an ORG directive and extract address
+            function checkOrg(line) {
+                const match = line.match(/^\s*\.?(org)\s+[\$]?([0-9a-fA-F]+)h?\s*(?:;.*)?$/i) ||
+                              line.match(/^\s*\.?(org)\s+0x([0-9a-fA-F]+)\s*(?:;.*)?$/i) ||
+                              line.match(/^\s*\.?(org)\s+(\d+)\s*(?:;.*)?$/i);
+                if (match) {
+                    const val = match[2];
+                    if (val.match(/^[0-9a-fA-F]+$/) && line.match(/[\$h]|0x/i)) {
+                        return parseInt(val, 16);
+                    }
+                    return parseInt(val, 10);
+                }
+                return null;
+            }
+
+            // Helper to estimate instruction size (rough approximation for header detection)
+            function estimateSize(line) {
+                const trimmed = line.trim().toLowerCase();
+                if (!trimmed || trimmed.startsWith(';')) return 0;
+                // DB/DEFB/BYTE directives
+                if (/^\s*\.?(db|defb|byte|text)\s+/i.test(line)) {
+                    // Count items roughly
+                    const content = line.replace(/^[^;]*?(db|defb|byte|text)\s+/i, '').split(';')[0];
+                    const strings = content.match(/"[^"]*"|'[^']*'/g) || [];
+                    let size = 0;
+                    strings.forEach(s => size += s.length - 2);
+                    const nonStrings = content.replace(/"[^"]*"|'[^']*'/g, '').split(',').filter(x => x.trim());
+                    size += nonStrings.length;
+                    return Math.max(1, size);
+                }
+                // DW/DEFW/WORD
+                if (/^\s*\.?(dw|defw|word)\s+/i.test(line)) {
+                    const items = line.replace(/^[^;]*?(dw|defw|word)\s+/i, '').split(';')[0].split(',');
+                    return items.length * 2;
+                }
+                // DS/DEFS/BLOCK
+                const dsMatch = line.match(/^\s*\.?(ds|defs|block)\s+(\d+)/i);
+                if (dsMatch) return parseInt(dsMatch[2], 10);
+                // JP/CALL = 3 bytes, JR/DJNZ = 2 bytes, most others 1-4
+                if (/^\s*(jp|call)\s+/i.test(trimmed)) return 3;
+                if (/^\s*(jr|djnz)\s+/i.test(trimmed)) return 2;
+                if (/^\s*(ret|nop|halt|ei|di|reti|retn|cpl|scf|ccf|daa|rlca|rrca|rla|rra)\s*(?:;.*)?$/i.test(trimmed)) return 1;
+                // Default estimate for instructions
+                if (/^\s*[a-z]+\s+/i.test(trimmed)) return 2;
+                return 0;
+            }
+
             lines.forEach((line, index) => {
                 const trimmed = line.trim();
                 if (!trimmed || trimmed.startsWith(';')) return;
                 const lineNum = index + 1;
 
+                // Check for ORG directive
+                const orgAddr = checkOrg(line);
+                if (orgAddr !== null) {
+                    pc = orgAddr;
+                    inHeaderRegion = (pc >= HEADER_START && pc < HEADER_END);
+                    return; // Don't check ORG lines for optimizations
+                }
+
+                // Update header region flag
+                inHeaderRegion = (pc >= HEADER_START && pc < HEADER_END);
+
+                // Skip byte-saving optimizations in header region
+                const skipByteSaving = inHeaderRegion;
+
                 // Check peephole patterns
-                if (optimizerConfig.peephole) {
+                if (optimizerConfig.peephole && !skipByteSaving) {
                     optimizationPatterns.peephole.forEach(pattern => {
                         if (pattern.detect(line)) {
                             suggestions.push({ line: lineNum, original: trimmed, ...pattern });
@@ -1606,7 +1705,7 @@
                     });
                 }
 
-                // Check warning patterns
+                // Check warning patterns (always check, not byte-saving)
                 if (optimizerConfig.warnings) {
                     optimizationPatterns.warnings.forEach(pattern => {
                         if (pattern.detect(line)) {
@@ -1616,7 +1715,7 @@
                 }
 
                 // Check multi-line patterns (look ahead to next non-empty line)
-                if (optimizerConfig.peephole && index < lines.length - 1) {
+                if (optimizerConfig.peephole && !skipByteSaving && index < lines.length - 1) {
                     // Find next non-empty, non-comment line
                     let nextIndex = index + 1;
                     while (nextIndex < lines.length) {
@@ -1640,6 +1739,9 @@
                         });
                     }
                 }
+
+                // Update PC estimate
+                pc += estimateSize(line);
             });
 
             // Check formatting issues - add single suggestion if issues found
@@ -1797,13 +1899,18 @@
                         const lineLabel = s.endLine ? `Lines ${s.line}-${s.endLine}` : `Line ${s.line}`;
                         // Format original code (handle multi-line with proper display)
                         const originalDisplay = s.original.replace(/</g, '&lt;').replace(/\n/g, '<br>');
+                        // Only show Apply button if pattern has replacement function and not marked noApply
+                        const canApply = !s.noApply && (s.replacement || s.multiLineReplacement);
+                        const applyButton = canApply
+                            ? `<button class="apply-btn bg-green-600 hover:bg-green-500 text-white text-xs px-2 rounded" data-idx="${idx}">Apply</button>`
+                            : '';
                         html += `
                         <div class="bg-gray-800 rounded p-2 mb-2 border-l-2 ${info.border}" id="suggestion-${idx}">
                             <div class="flex justify-between items-start mb-1">
                                 <span class="${info.color} text-xs font-bold">${lineLabel}: ${s.name}</span>
                                 <div class="flex gap-2">
                                     <button class="goto-line-btn text-blue-400 hover:text-blue-300 text-xs" data-line="${s.line}">Go to</button>
-                                    <button class="apply-btn bg-green-600 hover:bg-green-500 text-white text-xs px-2 rounded" data-idx="${idx}">Apply</button>
+                                    ${applyButton}
                                 </div>
                             </div>
                             <div class="text-gray-300 text-xs font-mono bg-gray-900 p-1 rounded mb-1">${originalDisplay}</div>
@@ -4613,6 +4720,8 @@
                     callMerge: 0,
                     rstOptimized: 0,
                     rstVectorsUsed: 0,
+                    routinesInlined: 0,
+                    inlinePasses: 0,
                     bytesSaved: 0
                 };
                 this.rstMappings = {}; // Track which routines are mapped to which RST vectors
@@ -4621,6 +4730,12 @@
             // Phase 1: Optimizations that don't depend on accurate final addresses
             optimizePhase1(tokens) {
                 let optimized = tokens;
+
+                // Routine inlining (configurable) - iterative passes
+                // Must run BEFORE dead code elimination since inlining creates dead routines
+                if (this.config.inlineRoutines) {
+                    optimized = this.inlineSingleCallRoutines(optimized);
+                }
 
                 // Dead code elimination (configurable)
                 if (this.config.deadCode) {
@@ -4786,6 +4901,214 @@
                 }
             }
 
+
+            // Inline routines that are called only once (iterative)
+            inlineSingleCallRoutines(tokens) {
+                const MAX_PASSES = 10; // Prevent infinite loops
+                let currentTokens = tokens;
+                let totalInlined = 0;
+
+                for (let pass = 0; pass < MAX_PASSES; pass++) {
+                    const result = this.inlinePass(currentTokens);
+
+                    if (result.inlinedCount === 0) {
+                        // No more inlining possible
+                        break;
+                    }
+
+                    currentTokens = result.tokens;
+                    totalInlined += result.inlinedCount;
+                    this.stats.inlinePasses++;
+
+                    log(`  Inline pass ${pass + 1}: inlined ${result.inlinedCount} routine(s)`, 'debug');
+                }
+
+                if (totalInlined > 0) {
+                    this.stats.routinesInlined = totalInlined;
+                    // Each inline saves CALL (3 bytes) + RET (1 byte) = 4 bytes
+                    this.stats.bytesSaved += totalInlined * 4;
+                    log(`  Routine inlining: inlined ${totalInlined} routine(s) in ${this.stats.inlinePasses} pass(es), saved ${totalInlined * 4} bytes`, 'info');
+                }
+
+                return currentTokens;
+            }
+
+            // Single pass of routine inlining
+            inlinePass(tokens) {
+                // Step 1: Build label map and find all routines (label followed by code ending in RET)
+                const labels = new Map(); // label name → token index
+                const routines = new Map(); // label name → { startIdx, endIdx, tokens[], isLeaf, size }
+
+                tokens.forEach((token, idx) => {
+                    if (token.label) {
+                        labels.set(token.label, idx);
+                    }
+                });
+
+                // Step 2: Identify routines (sequences ending in RET/RETI/RETN)
+                for (const [labelName, startIdx] of labels) {
+                    // Skip labels in ROM header area ($8000-$8030)
+                    const labelAddr = this.symbolTable[labelName];
+                    if (labelAddr !== undefined && labelAddr >= 0x8000 && labelAddr <= 0x8030) {
+                        continue;
+                    }
+
+                    // Find the end of this routine (next RET, RETI, RETN, or unconditional JP)
+                    let endIdx = -1;
+                    let isLeaf = true;
+                    let hasConditionalRet = false;
+                    const routineTokens = [];
+
+                    for (let i = startIdx; i < tokens.length; i++) {
+                        const token = tokens[i];
+
+                        // Stop if we hit another label (except on the first token)
+                        if (i > startIdx && token.label) {
+                            break;
+                        }
+
+                        routineTokens.push(token);
+
+                        if (token instanceof Instruction) {
+                            const mnem = token.mnemonic.toLowerCase();
+
+                            // Check if routine calls other routines (not a leaf)
+                            if (mnem === 'call') {
+                                isLeaf = false;
+                            }
+
+                            // Check for conditional returns (makes inlining complex)
+                            if (['ret', 'reti', 'retn'].includes(mnem) && token.operands.length > 0) {
+                                hasConditionalRet = true;
+                            }
+
+                            // Found end of routine
+                            if (['ret', 'reti', 'retn'].includes(mnem) && token.operands.length === 0) {
+                                endIdx = i;
+                                break;
+                            }
+
+                            // Unconditional JP also ends a routine (tail call)
+                            if (mnem === 'jp' && token.operands.length === 1) {
+                                // This is a tail-jump, not a returnable routine
+                                break;
+                            }
+                        }
+                    }
+
+                    // Only consider valid routines that end with unconditional RET
+                    if (endIdx !== -1 && !hasConditionalRet && routineTokens.length > 0) {
+                        routines.set(labelName, {
+                            startIdx,
+                            endIdx,
+                            tokens: routineTokens,
+                            isLeaf,
+                            size: routineTokens.length
+                        });
+                    }
+                }
+
+                // Step 3: Count CALL references to each routine
+                const callCounts = new Map(); // label name → count
+                const callSites = new Map(); // label name → [token indices of CALL instructions]
+
+                tokens.forEach((token, idx) => {
+                    if (token instanceof Instruction && token.mnemonic.toLowerCase() === 'call') {
+                        // Only unconditional calls for now
+                        if (token.operands.length === 1) {
+                            const target = token.operands[0];
+                            if (target.type === 'symbol') {
+                                const name = target.value;
+                                callCounts.set(name, (callCounts.get(name) || 0) + 1);
+                                if (!callSites.has(name)) {
+                                    callSites.set(name, []);
+                                }
+                                callSites.get(name).push(idx);
+                            }
+                        }
+                    }
+                });
+
+                // Step 4: Find leaf routines called exactly once
+                const inlineCandidates = [];
+
+                for (const [labelName, routine] of routines) {
+                    const count = callCounts.get(labelName) || 0;
+
+                    // Only inline if:
+                    // - Called exactly once
+                    // - Is a leaf routine (doesn't call other routines) OR we're doing iterative passes
+                    // - Not too large (arbitrary limit to prevent code bloat)
+                    if (count === 1 && routine.size <= 20) {
+                        // Check that routine is not referenced by JP (only CALL)
+                        let hasJpRef = false;
+                        tokens.forEach(token => {
+                            if (token instanceof Instruction &&
+                                ['jp', 'jr'].includes(token.mnemonic.toLowerCase())) {
+                                const target = token.operands[token.operands.length - 1];
+                                if (target.type === 'symbol' && target.value === labelName) {
+                                    hasJpRef = true;
+                                }
+                            }
+                        });
+
+                        if (!hasJpRef) {
+                            inlineCandidates.push({
+                                labelName,
+                                routine,
+                                callSiteIdx: callSites.get(labelName)[0]
+                            });
+                        }
+                    }
+                }
+
+                if (inlineCandidates.length === 0) {
+                    return { tokens, inlinedCount: 0 };
+                }
+
+                // Step 5: Perform inlining (process in reverse order to maintain indices)
+                // Sort by call site index descending so we don't invalidate indices
+                inlineCandidates.sort((a, b) => b.callSiteIdx - a.callSiteIdx);
+
+                let newTokens = [...tokens];
+                let inlinedCount = 0;
+
+                for (const candidate of inlineCandidates) {
+                    const { labelName, routine, callSiteIdx } = candidate;
+
+                    // Get the routine body (without the label on first token, without final RET)
+                    const bodyTokens = routine.tokens.slice(0, -1).map(t => {
+                        // Clone token without the label (label stays at original location for now)
+                        if (t.label === labelName) {
+                            // Clone without label
+                            if (t instanceof Instruction) {
+                                return new Instruction(null, t.mnemonic, [...t.operands], t.lineNumber);
+                            } else if (t instanceof Directive) {
+                                return new Directive(null, t.name, [...t.operands], t.lineNumber);
+                            }
+                        }
+                        return t;
+                    });
+
+                    // Replace CALL with routine body
+                    // The CALL instruction is at callSiteIdx
+                    newTokens.splice(callSiteIdx, 1, ...bodyTokens);
+
+                    // Mark original routine for removal by adding a special marker
+                    // We'll remove it in a cleanup pass
+                    // For now, just mark the routine's label with a prefix
+                    const routineStart = routine.startIdx;
+                    if (newTokens[routineStart] && newTokens[routineStart].label === labelName) {
+                        // Add comment to mark as inlined (will be removed by dead code elimination)
+                        // Actually, let's just leave it - dead code elimination will remove it
+                    }
+
+                    inlinedCount++;
+                    log(`    Inlined routine '${labelName}' (${routine.size} tokens) at call site`, 'debug');
+                }
+
+                return { tokens: newTokens, inlinedCount };
+            }
 
             // NEW: Simple RST optimization - just replace CALL with RST, header patching is post-compilation
             optimizeRstVectors(tokens) {
