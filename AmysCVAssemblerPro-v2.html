@@ -450,62 +450,39 @@
                 <button id="optimizer-config-close" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div class="space-y-3 text-sm">
-                <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" id="opt-jp-to-jr" class="mt-1 mr-3" checked>
-                    <div>
-                        <div class="text-gray-200 font-semibold">JP → JR conversion</div>
-                        <div class="text-gray-400 text-xs">Convert JP to JR when target is in range (-126 to +129 bytes). Saves 1 byte per conversion.</div>
-                    </div>
-                </label>
-                <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" id="opt-ld-to-xor" class="mt-1 mr-3" checked>
-                    <div>
-                        <div class="text-gray-200 font-semibold">LD A,0 → XOR A</div>
-                        <div class="text-gray-400 text-xs">Replace LD A,0 with XOR A. Saves 1 byte per conversion.</div>
-                    </div>
-                </label>
+                <div class="text-gray-400 text-xs mb-2">Settings apply to both auto-optimizer and assistant.</div>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-peephole" class="mt-1 mr-3" checked>
                     <div>
                         <div class="text-gray-200 font-semibold">Peephole optimizations</div>
-                        <div class="text-gray-400 text-xs">Remove redundant loads, INC/DEC pairs, PUSH/POP pairs, arithmetic no-ops (ADD A,0, SUB 0, etc.), CP 0→OR A. Does NOT remove NOP instructions.</div>
+                        <div class="text-gray-400 text-xs">JP→JR, LD A,0→XOR A, CP 0→OR A, redundant loads, INC/DEC pairs, PUSH/POP pairs, arithmetic no-ops.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-dead-code" class="mt-1 mr-3">
                     <div>
-                        <div class="text-gray-200 font-semibold">Dead code elimination</div>
+                        <div class="text-gray-200 font-semibold">Dead code elimination <span class="text-orange-400">(auto-optimizer only)</span></div>
                         <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> May remove intentional unreachable code or break ROM structure.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-rst-vectors" class="mt-1 mr-3">
                     <div>
-                        <div class="text-gray-200 font-semibold">RST vector optimization</div>
-                        <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Converts CALL to RST. May conflict with ROM header or interrupt handlers.</div>
-                    </div>
-                </label>
-                <div class="border-t border-gray-600 my-3 pt-3">
-                    <div class="text-gray-300 text-xs font-semibold mb-2">Assistant &amp; Formatting</div>
-                </div>
-                <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" id="opt-assistant-peephole" class="mt-1 mr-3" checked>
-                    <div>
-                        <div class="text-gray-200 font-semibold">Show peephole suggestions</div>
-                        <div class="text-gray-400 text-xs">CP 0→OR A, LD A,0→XOR A, and other byte-saving patterns.</div>
+                        <div class="text-gray-200 font-semibold">RST vector optimization <span class="text-orange-400">(auto-optimizer only)</span></div>
+                        <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Converts CALL to RST. May conflict with ROM header.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" id="opt-assistant-warnings" class="mt-1 mr-3" checked>
+                    <input type="checkbox" id="opt-warnings" class="mt-1 mr-3" checked>
                     <div>
-                        <div class="text-gray-200 font-semibold">Show warnings</div>
-                        <div class="text-gray-400 text-xs">Obsolete directives (SECTION VIRTUAL), best practices.</div>
+                        <div class="text-gray-200 font-semibold">Warnings &amp; best practices</div>
+                        <div class="text-gray-400 text-xs">Obsolete directives (SECTION VIRTUAL), potential issues.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
-                    <input type="checkbox" id="opt-assistant-formatting" class="mt-1 mr-3" checked>
+                    <input type="checkbox" id="opt-formatting" class="mt-1 mr-3" checked>
                     <div>
-                        <div class="text-gray-200 font-semibold">Show formatting suggestions</div>
+                        <div class="text-gray-200 font-semibold">Formatting suggestions</div>
                         <div class="text-gray-400 text-xs">Inconsistent indentation, mixed case, alignment issues.</div>
                     </div>
                 </label>
@@ -647,18 +624,14 @@
         optimizerToggle.addEventListener('change', () => syncOptimizerToggle(optimizerToggle.checked));
         optimizerTogglePanel.addEventListener('change', () => syncOptimizerToggle(optimizerTogglePanel.checked));
 
-        // Optimizer configuration
+        // Optimizer configuration (shared between auto-optimizer and assistant)
         let optimizerConfig = {
-            jpToJr: true,
-            ldToXor: true,
-            peephole: true,
-            deadCode: false,
-            rstVectors: false,
-            // Assistant options
-            assistantPeephole: true,
-            assistantWarnings: true,
-            assistantFormatting: true,
-            autoScan: true,
+            peephole: true,         // All peephole: JP→JR, LD→XOR, redundant ops, etc.
+            deadCode: false,        // Auto-optimizer only (disabled by default)
+            rstVectors: false,      // Auto-optimizer only (disabled by default)
+            warnings: true,         // Warnings & best practices
+            formatting: true,       // Formatting suggestions
+            autoScan: true,         // Auto-scan on file open
             // Formatting style
             uppercaseDirectives: true,
             lowercaseOpcodes: true,
@@ -685,14 +658,11 @@
         const optimizerConfigSave = document.getElementById('optimizer-config-save');
         const optimizerConfigCancel = document.getElementById('optimizer-config-cancel');
 
-        const optJpToJr = document.getElementById('opt-jp-to-jr');
-        const optLdToXor = document.getElementById('opt-ld-to-xor');
         const optPeephole = document.getElementById('opt-peephole');
         const optDeadCode = document.getElementById('opt-dead-code');
         const optRstVectors = document.getElementById('opt-rst-vectors');
-        const optAssistantPeephole = document.getElementById('opt-assistant-peephole');
-        const optAssistantWarnings = document.getElementById('opt-assistant-warnings');
-        const optAssistantFormatting = document.getElementById('opt-assistant-formatting');
+        const optWarnings = document.getElementById('opt-warnings');
+        const optFormatting = document.getElementById('opt-formatting');
         const optAutoScan = document.getElementById('opt-auto-scan');
         const optFormatUppercaseDirectives = document.getElementById('opt-format-uppercase-directives');
         const optFormatLowercaseOpcodes = document.getElementById('opt-format-lowercase-opcodes');
@@ -703,14 +673,11 @@
         // Open modal (from both header button and panel button)
         const openOptimizerModal = () => {
             // Load current config into checkboxes
-            optJpToJr.checked = optimizerConfig.jpToJr;
-            optLdToXor.checked = optimizerConfig.ldToXor;
             optPeephole.checked = optimizerConfig.peephole;
             optDeadCode.checked = optimizerConfig.deadCode;
             optRstVectors.checked = optimizerConfig.rstVectors;
-            optAssistantPeephole.checked = optimizerConfig.assistantPeephole;
-            optAssistantWarnings.checked = optimizerConfig.assistantWarnings;
-            optAssistantFormatting.checked = optimizerConfig.assistantFormatting;
+            optWarnings.checked = optimizerConfig.warnings;
+            optFormatting.checked = optimizerConfig.formatting;
             optAutoScan.checked = optimizerConfig.autoScan;
             optFormatUppercaseDirectives.checked = optimizerConfig.uppercaseDirectives;
             optFormatLowercaseOpcodes.checked = optimizerConfig.lowercaseOpcodes;
@@ -742,14 +709,11 @@
         // Save config
         optimizerConfigSave.addEventListener('click', () => {
             optimizerConfig = {
-                jpToJr: optJpToJr.checked,
-                ldToXor: optLdToXor.checked,
                 peephole: optPeephole.checked,
                 deadCode: optDeadCode.checked,
                 rstVectors: optRstVectors.checked,
-                assistantPeephole: optAssistantPeephole.checked,
-                assistantWarnings: optAssistantWarnings.checked,
-                assistantFormatting: optAssistantFormatting.checked,
+                warnings: optWarnings.checked,
+                formatting: optFormatting.checked,
                 autoScan: optAutoScan.checked,
                 uppercaseDirectives: optFormatUppercaseDirectives.checked,
                 lowercaseOpcodes: optFormatLowercaseOpcodes.checked,
@@ -1366,63 +1330,103 @@
                     warning: 'XOR A also affects flags (sets Z, clears C).'
                 },
                 {
-                    name: 'ADD A,0 is no-op',
+                    name: 'ADD A,0 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(add|ADD)\s+[aA]\s*,\s*0\s*(?:;.*)?$/.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: ADD A,0 is no-op',
-                    explanation: 'ADD A,0 does nothing but waste cycles. Can be removed unless flags are needed.',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'ADD A,0 does nothing but waste cycles.',
                     savings: '2 bytes, 7 T-states',
-                    warning: 'Only remove if you don\'t need the flags.'
+                    warning: 'Only remove if flags are not needed.'
                 },
                 {
-                    name: 'SUB 0 is no-op',
+                    name: 'ADC A,0 no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(adc|ADC)\s+[aA]\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'ADC A,0 only adds carry. Often unintended.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Review: may be intentional if using carry.'
+                },
+                {
+                    name: 'SUB 0 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(sub|SUB)\s+0\s*(?:;.*)?$/.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: SUB 0 is no-op',
-                    explanation: 'SUB 0 does nothing but waste cycles. Can be removed unless flags are needed.',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'SUB 0 does nothing but waste cycles.',
                     savings: '2 bytes, 7 T-states',
-                    warning: 'Only remove if you don\'t need the flags.'
+                    warning: 'Only remove if flags are not needed.'
                 },
                 {
-                    name: 'AND 255 is no-op',
+                    name: 'SBC A,0 no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(sbc|SBC)\s+[aA]\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'SBC A,0 only subtracts carry. Often unintended.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Review: may be intentional if using carry.'
+                },
+                {
+                    name: 'AND 255 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(and|AND)\s+(255|0xff|0FFh|\$ff)\s*(?:;.*)?$/i.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: AND 255 is no-op',
-                    explanation: 'AND 255 ($FF) does nothing to the value. Can be removed unless flags are needed.',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'AND $FF does nothing to an 8-bit value.',
                     savings: '2 bytes, 7 T-states',
-                    warning: 'Only remove if you don\'t need the flags.'
+                    warning: 'Only remove if flags are not needed.'
                 },
                 {
-                    name: 'OR 0 is no-op',
+                    name: 'OR 0 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(or|OR)\s+0\s*(?:;.*)?$/.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: OR 0 is no-op',
-                    explanation: 'OR 0 does nothing to the value. Can be removed unless flags are needed.',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'OR 0 does nothing but waste cycles.',
                     savings: '2 bytes, 7 T-states',
-                    warning: 'Only remove if you don\'t need the flags.'
+                    warning: 'Only remove if flags are not needed.'
                 },
                 {
-                    name: 'XOR 0 is no-op',
+                    name: 'XOR 0 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(xor|XOR)\s+0\s*(?:;.*)?$/.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: XOR 0 is no-op',
-                    explanation: 'XOR 0 does nothing to the value. Can be removed unless flags are needed.',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'XOR 0 does nothing but waste cycles.',
                     savings: '2 bytes, 7 T-states',
-                    warning: 'Only remove if you don\'t need the flags.'
+                    warning: 'Only remove if flags are not needed.'
                 },
                 {
-                    name: 'JP to next instruction',
+                    name: 'LD r,r no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(ld|LD)\s+([abcdehl])\s*,\s*\2\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; no-op removed',
+                    explanation: 'Loading a register into itself does nothing.',
+                    savings: '1 byte, 4 T-states'
+                },
+                {
+                    name: 'JP $+3 no-op',
                     category: 'peephole',
                     detect: (line) => /^\s*(jp|JP)\s+\$\+3\s*(?:;.*)?$/.test(line),
                     suggestion: 'Remove line',
-                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: useless jump',
-                    explanation: 'JP $+3 jumps to the very next instruction - this is a 3-byte NOP. Unless used for timing, it can be removed.',
-                    savings: '3 bytes, 10 T-states'
+                    replacement: (line) => '; ' + line.trim() + ' ; useless jump removed',
+                    explanation: 'JP $+3 jumps to next instruction - a 3-byte NOP.',
+                    savings: '3 bytes, 10 T-states',
+                    warning: 'Unless used for timing purposes.'
+                },
+                {
+                    name: 'JR $+2 no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(jr|JR)\s+\$\+2\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; useless jump removed',
+                    explanation: 'JR $+2 jumps to next instruction - a 2-byte NOP.',
+                    savings: '2 bytes, 12 T-states',
+                    warning: 'Unless used for timing purposes.'
                 }
             ],
             warnings: [
@@ -1438,6 +1442,58 @@
             ],
             formatting: []
         };
+
+        // Multi-line patterns (require looking at consecutive lines)
+        const multiLinePatterns = [
+            {
+                name: 'PUSH/POP pair',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const push = line1.match(/^\s*(push|PUSH)\s+(af|bc|de|hl|ix|iy)\s*(?:;.*)?$/i);
+                    const pop = line2.match(/^\s*(pop|POP)\s+(af|bc|de|hl|ix|iy)\s*(?:;.*)?$/i);
+                    return push && pop && push[2].toLowerCase() === pop[2].toLowerCase();
+                },
+                suggestion: 'Remove both lines',
+                explanation: 'PUSH followed immediately by POP of the same register is a no-op.',
+                savings: '2 bytes, 21-23 T-states'
+            },
+            {
+                name: 'INC/DEC pair',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const inc = line1.match(/^\s*(inc|INC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
+                    const dec = line2.match(/^\s*(dec|DEC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
+                    return inc && dec && inc[2].toLowerCase() === dec[2].toLowerCase();
+                },
+                suggestion: 'Remove both lines',
+                explanation: 'INC followed immediately by DEC of the same register/memory is a no-op.',
+                savings: '2 bytes, 8+ T-states'
+            },
+            {
+                name: 'DEC/INC pair',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const dec = line1.match(/^\s*(dec|DEC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
+                    const inc = line2.match(/^\s*(inc|INC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
+                    return dec && inc && dec[2].toLowerCase() === inc[2].toLowerCase();
+                },
+                suggestion: 'Remove both lines',
+                explanation: 'DEC followed immediately by INC of the same register/memory is a no-op.',
+                savings: '2 bytes, 8+ T-states'
+            },
+            {
+                name: 'Redundant LD (overwritten)',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const ld1 = line1.match(/^\s*(ld|LD)\s+([abcdehl])\s*,\s*(\d+|0x[0-9a-f]+|\$[0-9a-f]+|[0-9]+h)\s*(?:;.*)?$/i);
+                    const ld2 = line2.match(/^\s*(ld|LD)\s+([abcdehl])\s*,\s*(\d+|0x[0-9a-f]+|\$[0-9a-f]+|[0-9]+h|[abcdehl]|\([^)]+\))\s*(?:;.*)?$/i);
+                    return ld1 && ld2 && ld1[2].toLowerCase() === ld2[2].toLowerCase();
+                },
+                suggestion: 'Remove first LD',
+                explanation: 'First LD is immediately overwritten by second LD to the same register.',
+                savings: '2 bytes, 7 T-states'
+            }
+        ];
 
         let currentSuggestions = [];
 
@@ -1628,7 +1684,7 @@
                 const lineNum = index + 1;
 
                 // Check peephole patterns
-                if (optimizerConfig.assistantPeephole) {
+                if (optimizerConfig.peephole) {
                     optimizationPatterns.peephole.forEach(pattern => {
                         if (pattern.detect(line)) {
                             suggestions.push({ line: lineNum, original: trimmed, ...pattern });
@@ -1637,17 +1693,43 @@
                 }
 
                 // Check warning patterns
-                if (optimizerConfig.assistantWarnings) {
+                if (optimizerConfig.warnings) {
                     optimizationPatterns.warnings.forEach(pattern => {
                         if (pattern.detect(line)) {
                             suggestions.push({ line: lineNum, original: trimmed, ...pattern });
                         }
                     });
                 }
+
+                // Check multi-line patterns (look ahead to next non-empty line)
+                if (optimizerConfig.peephole && index < lines.length - 1) {
+                    // Find next non-empty, non-comment line
+                    let nextIndex = index + 1;
+                    while (nextIndex < lines.length) {
+                        const nextTrimmed = lines[nextIndex].trim();
+                        if (nextTrimmed && !nextTrimmed.startsWith(';')) break;
+                        nextIndex++;
+                    }
+                    if (nextIndex < lines.length) {
+                        const nextLine = lines[nextIndex];
+                        const nextTrimmed = nextLine.trim();
+                        multiLinePatterns.forEach(pattern => {
+                            if (pattern.detect(line, nextLine)) {
+                                suggestions.push({
+                                    line: lineNum,
+                                    endLine: nextIndex + 1,
+                                    original: `${trimmed}\n${nextTrimmed}`,
+                                    category: pattern.category,
+                                    ...pattern
+                                });
+                            }
+                        });
+                    }
+                }
             });
 
             // Check formatting issues - add single suggestion if issues found
-            if (optimizerConfig.assistantFormatting) {
+            if (optimizerConfig.formatting) {
                 const formattingIssueCount = hasFormattingIssues();
                 if (formattingIssueCount > 0) {
                     suggestions.push({
@@ -1709,16 +1791,20 @@
                             <span class="text-green-400 text-xs">${s.suggestion}</span>
                         </div>`;
                     } else {
+                        // Determine line label (single line vs range for multi-line patterns)
+                        const lineLabel = s.endLine ? `Lines ${s.line}-${s.endLine}` : `Line ${s.line}`;
+                        // Format original code (handle multi-line with proper display)
+                        const originalDisplay = escapeHtml(s.original).replace(/\n/g, '<br>');
                         html += `
                         <div class="bg-gray-800 rounded p-2 mb-2 border-l-2 ${info.border}" id="suggestion-${idx}">
                             <div class="flex justify-between items-start mb-1">
-                                <span class="${info.color} text-xs font-bold">Line ${s.line}: ${s.name}</span>
+                                <span class="${info.color} text-xs font-bold">${lineLabel}: ${s.name}</span>
                                 <div class="flex gap-2">
                                     <button class="goto-line-btn text-blue-400 hover:text-blue-300 text-xs" data-line="${s.line}">Go to</button>
                                     <button class="apply-btn bg-green-600 hover:bg-green-500 text-white text-xs px-2 rounded" data-idx="${idx}">Apply</button>
                                 </div>
                             </div>
-                            <div class="text-gray-300 text-xs font-mono bg-gray-900 p-1 rounded mb-1">${escapeHtml(s.original)}</div>
+                            <div class="text-gray-300 text-xs font-mono bg-gray-900 p-1 rounded mb-1">${originalDisplay}</div>
                             <div class="text-gray-400 text-xs mb-1">${s.explanation}</div>
                             <span class="text-green-400 text-xs">Use: <code class="bg-gray-700 px-1 rounded">${s.suggestion}</code></span>
                             ${s.warning ? `<div class="text-orange-400 text-xs mt-1">${s.warning}</div>` : ''}
@@ -1745,11 +1831,28 @@
                 btn.addEventListener('click', () => {
                     const idx = parseInt(btn.dataset.idx);
                     const suggestion = currentSuggestions[idx];
-                    if (suggestion && suggestion.replacement) {
+                    if (suggestion) {
                         const lineNum = suggestion.line - 1;
-                        const oldLine = editor.getLine(lineNum);
-                        const newLine = suggestion.replacement(oldLine);
-                        editor.replaceRange(newLine, {line: lineNum, ch: 0}, {line: lineNum, ch: oldLine.length});
+
+                        if (suggestion.endLine) {
+                            // Multi-line pattern - remove both lines (or apply multiLineReplacement)
+                            const endLineNum = suggestion.endLine - 1;
+                            if (suggestion.multiLineReplacement) {
+                                // Replace with specific code
+                                const newCode = suggestion.multiLineReplacement(editor.getLine(lineNum), editor.getLine(endLineNum));
+                                editor.replaceRange(newCode, {line: lineNum, ch: 0}, {line: endLineNum + 1, ch: 0});
+                            } else {
+                                // Default: remove both lines (for no-op patterns)
+                                editor.replaceRange('', {line: lineNum, ch: 0}, {line: endLineNum + 1, ch: 0});
+                            }
+                            log(`Applied optimization at lines ${suggestion.line}-${suggestion.endLine}: ${suggestion.name}`, 'info');
+                        } else if (suggestion.replacement) {
+                            // Single-line pattern
+                            const oldLine = editor.getLine(lineNum);
+                            const newLine = suggestion.replacement(oldLine);
+                            editor.replaceRange(newLine, {line: lineNum, ch: 0}, {line: lineNum, ch: oldLine.length});
+                            log(`Applied optimization at line ${suggestion.line}: ${suggestion.name}`, 'info');
+                        }
 
                         // Mark this suggestion as applied
                         const card = document.getElementById(`suggestion-${idx}`);
@@ -1761,8 +1864,6 @@
                             btn.classList.remove('bg-green-600', 'hover:bg-green-500');
                             btn.classList.add('bg-gray-600');
                         }
-
-                        log(`Applied optimization at line ${suggestion.line}: ${suggestion.name}`, 'info');
                     }
                 });
             });
@@ -6687,9 +6788,9 @@
 
                     const mnem = token.mnemonic.toLowerCase();
 
-                    // Optimization 1: JP → JR
+                    // Optimization 1: JP → JR (part of peephole optimizations)
                     // Skip if dead code elimination was used (addresses are unstable)
-                    if (this.config.jpToJr && !this.config.deadCode && mnem === 'jp' && token.operands.length > 0) {
+                    if (this.config.peephole && !this.config.deadCode && mnem === 'jp' && token.operands.length > 0) {
                         const lastOp = token.operands[token.operands.length - 1];
 
                         // Only optimize direct jumps (not JP (HL), JP (IX), etc.)
@@ -6739,8 +6840,8 @@
                         }
                     }
 
-                    // Optimization 2: LD A,0 → XOR A
-                    if (this.config.ldToXor && mnem === 'ld' && token.operands.length === 2) {
+                    // Optimization 2: LD A,0 → XOR A (part of peephole optimizations)
+                    if (this.config.peephole && mnem === 'ld' && token.operands.length === 2) {
                         const dest = token.operands[0];
                         const src = token.operands[1];
 
