@@ -1,10 +1,10 @@
 # Amy's ColecoVision Assembler
 
-A powerful web-based Z80 assembler specifically designed for ColecoVision game development. Build retro games directly in your browser with no installation required!
+A web-based Z80 assembler for ColecoVision game development. Build retro games directly in your browser with no installation required.
 
 ## 🎮 What is This Tool?
 
-Amy's ColecoVision Assembler is a complete Z80 development environment that runs entirely in your web browser. It features:
+Amy's ColecoVision Assembler is a Z80 development environment that runs in your web browser. It features:
 
 - **Browser-Based** - No installation, no setup, works offline
 - **Two Versions** - Standard (single-file) and Pro (multi-module projects)
@@ -35,7 +35,7 @@ Amy's ColecoVision Assembler is a complete Z80 development environment that runs
 | Z80 instruction set | ✅ | ✅ |
 | INCLUDE directive | ✅ | ✅ |
 | Macros (MACRO/ENDM) | ✅ | ✅ |
-| Conditional assembly (IF/IFDEF) | ✅ | ✅ |
+| Conditional assembly (IF/IFDEF/IFNDEF) | ✅ | ✅ |
 | **Directives** |
 | TIMES directive (repeat) | ✅ | ✅ |
 | ALIGN directive (padding) | ✅ | ✅ |
@@ -411,42 +411,41 @@ Compile both to .REL, then link them together in the Pro version.
 - **ALIGN** - Align to boundary
 - **INCLUDE** - Include another file
 - **MACRO/ENDM** - Define macro
-- **IF/IFDEF/ELSE/ENDIF** - Conditional assembly
+- **IF/IFDEF/IFNDEF/ELIF/ELSE/ENDIF** - Conditional assembly
 
-## 🛠️ Project Structure
+## 🛠️ Repository Files
 
-This repository includes:
-- **examples/** - Working assembly examples
-- **z80/** - Development workspace *(work in progress)*
-- **dev/** - Development tools, tests, backups *(not for GitHub)*
-- **docs/** - Complete documentation *(not for GitHub)*
+- **AmysCVAssembler.html** - Standard single-file assembler
+- **AmysCVAssemblerPro.html** - Pro version with multi-module support
+- **index.html** - Version selector page
+- **README.md** - This documentation
+- **CHANGELOG.md** - Version history and features
 
-## 🎯 Why Choose This Assembler?
+## 🎯 Key Features
 
-### vs TASM / ZMAC
-- ✅ No installation required (browser-based)
-- ✅ Works on any OS (Windows, Mac, Linux)
-- ✅ Modern UI with syntax highlighting
-- ✅ ColecoVision-specific features (boot screen preview)
+### Browser-Based Development
+- No installation required
+- Works on Windows, Mac, Linux
+- Runs entirely offline after first load
+- Modern UI with syntax highlighting
 
-### vs gasm80
-- ✅ TIMES and ALIGN directives (gasm80-compatible)
-- ✅ Multi-file projects with INCLUDE
-- ✅ Macros and conditional assembly
-- ✅ Pro version: Multi-module linking
+### ColecoVision Support
+- Proper ROM header generation
+- Boot screen preview
+- Symbol file generation (.sym)
+- Compatible with BlueMSX and openMSX emulators
 
-### vs Command-Line Assemblers
-- ✅ Instant feedback (no terminal commands)
-- ✅ Built-in text editor with highlighting
-- ✅ Visual boot screen preview
-- ✅ Works offline after first load
+### Assembler Features
+- Full Z80 instruction set
+- TIMES and ALIGN directives
+- Macros and conditional assembly
+- Multi-file projects (INCLUDE)
+- Multi-module linking (Pro version)
 
 ## 📖 Documentation
 
-For complete documentation and technical details, see:
-- [Full Documentation](docs/FULL_README.md)
-- [Changelog](docs/CHANGELOG.md)
-- [Bug Fixes](docs/BUGFIX_TIMES_EQU.md)
+- **[CHANGELOG.md](CHANGELOG.md)** - Complete version history and feature documentation
+- **[README.md](README.md)** - This file - quick start guide and examples
 
 ## 📄 License
 

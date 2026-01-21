@@ -59,6 +59,27 @@
         .cm-s-material-darker.CodeMirror {
             background-color: #1f2937;
         }
+
+        /* Breakpoints gutter styling */
+        .CodeMirror-gutter.breakpoints {
+            width: 20px;
+            background-color: #1f2937;
+            cursor: pointer;
+            border-right: 1px solid #374151;
+        }
+
+        .CodeMirror-gutter.breakpoints:hover {
+            background-color: #374151;
+        }
+
+        .CodeMirror-gutter.breakpoints .breakpoint-marker {
+            color: #d32f2f;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: center;
+            display: block;
+        }
         #drop-zone {
             border: 2px dashed #475569;
             background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
@@ -200,6 +221,18 @@
             <button id="export-symbols-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors hidden ml-2">
                 Export Symbols
             </button>
+            <span class="ml-3 text-xs text-gray-400" id="breakpoint-count">(0 breakpoints)</span>
+            <button type="button" id="clear-breakpoints-btn" class="ml-2 text-xs text-red-400 hover:text-red-300 cursor-pointer hidden" title="Clear all breakpoints">
+                Clear All
+            </button>
+            <div class="ml-4 flex items-center relative">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="optimizer-toggle" class="mr-2">
+                    <span class="text-sm text-gray-300">⚡ Optimize</span>
+                </label>
+                <button type="button" id="optimizer-config-btn" class="ml-1 text-xs text-gray-400 hover:text-gray-300 cursor-pointer" title="Optimizer settings">⚙️</button>
+                <span class="ml-2 text-xs text-green-400 hidden" id="bytes-saved-display"></span>
+            </div>
         </div>
 
         <!-- Burger menu (shown on mobile) -->
@@ -277,16 +310,140 @@
             </div>
         </div>
 
-        <!-- Right Panel: Console Output and Symbol Table -->
+        <!-- Right Panel: Console Output, Symbol Table, and Assistant -->
         <div class="w-1/4 flex flex-col bg-gray-800 p-3 rounded-lg shadow-lg">
             <div class="flex gap-1 mb-2 border-b border-gray-700 pb-1">
                 <button id="console-tab" class="tab-button active text-sm px-2 py-1 rounded" title="Console Output">📋</button>
                 <button id="symbols-tab" class="tab-button text-sm px-2 py-1 rounded" title="Symbol Table">🔤</button>
+                <button id="assistant-tab" class="tab-button text-sm px-2 py-1 rounded" title="Optimization Assistant">💡</button>
             </div>
             <pre id="console-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono"></pre>
             <pre id="symbols-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto whitespace-pre-wrap font-mono hidden"></pre>
+            <div id="assistant-output" class="flex-grow bg-gray-900 rounded-md p-2 text-sm overflow-y-auto hidden flex-col">
+                <div class="flex justify-between items-center mb-2 pb-2 border-b border-gray-700">
+                    <span class="text-gray-400 text-xs">Optimization Assistant</span>
+                    <div class="flex gap-1">
+                        <button id="scan-code-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded">Scan Code</button>
+                        <button id="format-code-btn" class="bg-purple-600 hover:bg-purple-700 text-white text-xs px-2 py-1 rounded">Format Code</button>
+                    </div>
+                </div>
+                <div id="assistant-suggestions" class="flex-grow overflow-y-auto">
+                    <p class="text-gray-500 text-xs italic">Click "Scan Code" to find optimization opportunities.</p>
+                </div>
+            </div>
         </div>
     </main>
+
+    <!-- Optimizer Configuration Modal -->
+    <div id="optimizer-config-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-white">Optimizer Settings</h3>
+                <button id="optimizer-config-close" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-jp-to-jr" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">JP → JR conversion</div>
+                        <div class="text-gray-400 text-xs">Convert JP to JR when target is in range (-126 to +129 bytes). Saves 1 byte per conversion.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-ld-to-xor" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">LD A,0 → XOR A</div>
+                        <div class="text-gray-400 text-xs">Replace LD A,0 with XOR A. Saves 1 byte per conversion.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-peephole" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Peephole optimizations</div>
+                        <div class="text-gray-400 text-xs">Remove redundant loads, INC/DEC pairs, PUSH/POP pairs, arithmetic no-ops (ADD A,0, SUB 0, etc.), CP 0→OR A. Does NOT remove NOP instructions.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-dead-code" class="mt-1 mr-3">
+                    <div>
+                        <div class="text-gray-200 font-semibold">Dead code elimination</div>
+                        <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> May remove intentional unreachable code or break ROM structure.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-rst-vectors" class="mt-1 mr-3">
+                    <div>
+                        <div class="text-gray-200 font-semibold">RST vector optimization</div>
+                        <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Converts CALL to RST. May conflict with ROM header or interrupt handlers.</div>
+                    </div>
+                </label>
+                <div class="border-t border-gray-600 my-3 pt-3">
+                    <div class="text-gray-300 text-xs font-semibold mb-2">Assistant &amp; Formatting</div>
+                </div>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-assistant-peephole" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Show peephole suggestions</div>
+                        <div class="text-gray-400 text-xs">CP 0→OR A, LD A,0→XOR A, and other byte-saving patterns.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-assistant-warnings" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Show warnings</div>
+                        <div class="text-gray-400 text-xs">Obsolete directives (SECTION VIRTUAL), best practices.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-assistant-formatting" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Show formatting suggestions</div>
+                        <div class="text-gray-400 text-xs">Inconsistent indentation, mixed case, alignment issues.</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-auto-scan" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Auto-scan on file open</div>
+                        <div class="text-gray-400 text-xs">Automatically scan code for suggestions when opening files.</div>
+                    </div>
+                </label>
+                <div class="border-t border-gray-600 my-3 pt-3">
+                    <div class="text-gray-300 text-xs font-semibold mb-2">Formatting Style</div>
+                </div>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-format-uppercase-directives" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Uppercase directives</div>
+                        <div class="text-gray-400 text-xs">ORG, EQU, DB, DW, SECTION (industry standard).</div>
+                    </div>
+                </label>
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" id="opt-format-lowercase-opcodes" class="mt-1 mr-3" checked>
+                    <div>
+                        <div class="text-gray-200 font-semibold">Lowercase opcodes &amp; registers</div>
+                        <div class="text-gray-400 text-xs">ld a,b instead of LD A,B (modern convention).</div>
+                    </div>
+                </label>
+                <div class="flex items-center gap-2 mt-2">
+                    <span class="text-gray-300 text-xs">Opcode column:</span>
+                    <input type="number" id="opt-format-opcode-col" class="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16" value="8" min="1" max="20">
+                    <span class="text-gray-300 text-xs">Operand col:</span>
+                    <input type="number" id="opt-format-operand-col" class="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16" value="16" min="8" max="32">
+                    <span class="text-gray-300 text-xs">Comment col:</span>
+                    <input type="number" id="opt-format-comment-col" class="bg-gray-700 text-white text-xs px-2 py-1 rounded w-16" value="40" min="20" max="60">
+                </div>
+            </div>
+            <div class="mt-6 flex gap-3">
+                <button id="optimizer-config-save" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    Save
+                </button>
+                <button id="optimizer-config-cancel" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // Enhanced CodeMirror setup with better Z80 syntax highlighting
@@ -317,6 +474,200 @@
             mode: 'z80',
             indentUnit: 4,
             tabSize: 4,
+            gutters: ['CodeMirror-linenumbers', 'breakpoints']
+        });
+
+        // Breakpoints storage
+        const breakpoints = new Set();
+
+        // Breakpoint marker creation
+        function makeBreakpointMarker() {
+            const marker = document.createElement('div');
+            marker.style.color = '#d32f2f';
+            marker.style.fontWeight = 'bold';
+            marker.style.cursor = 'pointer';
+            marker.style.fontSize = '16px';
+            marker.innerHTML = '●';
+            marker.title = 'Breakpoint (click to remove)';
+            return marker;
+        }
+
+        // Update breakpoint count display
+        function updateBreakpointCount() {
+            const count = breakpoints.size;
+            const countEl = document.getElementById('breakpoint-count');
+            const clearBtn = document.getElementById('clear-breakpoints-btn');
+
+            if (count === 0) {
+                countEl.textContent = '(no breakpoints)';
+                clearBtn.classList.add('hidden');
+            } else {
+                countEl.textContent = `(${count} breakpoint${count > 1 ? 's' : ''})`;
+                clearBtn.classList.remove('hidden');
+            }
+        }
+
+        // Toggle breakpoint on gutter click
+        editor.on('gutterClick', function(cm, lineNum, gutterName, event) {
+            console.log('Gutter clicked:', gutterName, 'line:', lineNum);
+            if (gutterName === 'breakpoints') {
+                const info = cm.lineInfo(lineNum);
+
+                if (info.gutterMarkers && info.gutterMarkers.breakpoints) {
+                    // Remove breakpoint
+                    cm.setGutterMarker(lineNum, 'breakpoints', null);
+                    breakpoints.delete(lineNum);
+                    log(`Breakpoint removed at line ${lineNum + 1}`, 'info');
+                } else {
+                    // Add breakpoint
+                    const marker = makeBreakpointMarker();
+                    cm.setGutterMarker(lineNum, 'breakpoints', marker);
+                    breakpoints.add(lineNum);
+                    log(`Breakpoint set at line ${lineNum + 1}`, 'info');
+                }
+
+                updateBreakpointCount();
+            }
+        });
+
+        // Clear all breakpoints button
+        document.getElementById('clear-breakpoints-btn').addEventListener('click', () => {
+            for (const lineNum of breakpoints) {
+                editor.setGutterMarker(lineNum, 'breakpoints', null);
+            }
+            breakpoints.clear();
+            updateBreakpointCount();
+            log('All breakpoints cleared', 'info');
+        });
+
+        // Breakpoint UI elements - always visible
+        const breakpointCount = document.getElementById('breakpoint-count');
+        const clearBreakpointsBtn = document.getElementById('clear-breakpoints-btn');
+
+        // Always show breakpoint gutter
+        breakpointCount.classList.remove('hidden');
+
+        // Optimizer toggle
+        const optimizerToggle = document.getElementById('optimizer-toggle');
+        let optimizerEnabled = localStorage.getItem('optimizerEnabled') === 'true';
+        optimizerToggle.checked = optimizerEnabled;
+
+        // Optimizer configuration
+        let optimizerConfig = {
+            jpToJr: true,
+            ldToXor: true,
+            peephole: true,
+            deadCode: false,
+            rstVectors: false,
+            // Assistant options
+            assistantPeephole: true,
+            assistantWarnings: true,
+            assistantFormatting: true,
+            autoScan: true,
+            // Formatting style
+            uppercaseDirectives: true,
+            lowercaseOpcodes: true,
+            opcodeCol: 8,
+            operandCol: 16,
+            commentCol: 40
+        };
+
+        // Load saved config from localStorage
+        const savedConfig = localStorage.getItem('optimizerConfig');
+        if (savedConfig) {
+            try {
+                optimizerConfig = JSON.parse(savedConfig);
+            } catch (e) {
+                console.error('Failed to load optimizer config:', e);
+            }
+        }
+
+        optimizerToggle.addEventListener('change', () => {
+            optimizerEnabled = optimizerToggle.checked;
+            localStorage.setItem('optimizerEnabled', optimizerEnabled);
+            log(`Code optimizer ${optimizerEnabled ? 'enabled' : 'disabled'}`, 'info');
+        });
+
+        // Optimizer config modal
+        const optimizerConfigBtn = document.getElementById('optimizer-config-btn');
+        const optimizerConfigModal = document.getElementById('optimizer-config-modal');
+        const optimizerConfigClose = document.getElementById('optimizer-config-close');
+        const optimizerConfigSave = document.getElementById('optimizer-config-save');
+        const optimizerConfigCancel = document.getElementById('optimizer-config-cancel');
+
+        const optJpToJr = document.getElementById('opt-jp-to-jr');
+        const optLdToXor = document.getElementById('opt-ld-to-xor');
+        const optPeephole = document.getElementById('opt-peephole');
+        const optDeadCode = document.getElementById('opt-dead-code');
+        const optRstVectors = document.getElementById('opt-rst-vectors');
+        const optAssistantPeephole = document.getElementById('opt-assistant-peephole');
+        const optAssistantWarnings = document.getElementById('opt-assistant-warnings');
+        const optAssistantFormatting = document.getElementById('opt-assistant-formatting');
+        const optAutoScan = document.getElementById('opt-auto-scan');
+        const optFormatUppercaseDirectives = document.getElementById('opt-format-uppercase-directives');
+        const optFormatLowercaseOpcodes = document.getElementById('opt-format-lowercase-opcodes');
+        const optFormatOpcodeCol = document.getElementById('opt-format-opcode-col');
+        const optFormatOperandCol = document.getElementById('opt-format-operand-col');
+        const optFormatCommentCol = document.getElementById('opt-format-comment-col');
+
+        // Open modal
+        optimizerConfigBtn.addEventListener('click', () => {
+            // Load current config into checkboxes
+            optJpToJr.checked = optimizerConfig.jpToJr;
+            optLdToXor.checked = optimizerConfig.ldToXor;
+            optPeephole.checked = optimizerConfig.peephole;
+            optDeadCode.checked = optimizerConfig.deadCode;
+            optRstVectors.checked = optimizerConfig.rstVectors;
+            optAssistantPeephole.checked = optimizerConfig.assistantPeephole;
+            optAssistantWarnings.checked = optimizerConfig.assistantWarnings;
+            optAssistantFormatting.checked = optimizerConfig.assistantFormatting;
+            optAutoScan.checked = optimizerConfig.autoScan;
+            optFormatUppercaseDirectives.checked = optimizerConfig.uppercaseDirectives;
+            optFormatLowercaseOpcodes.checked = optimizerConfig.lowercaseOpcodes;
+            optFormatOpcodeCol.value = optimizerConfig.opcodeCol;
+            optFormatOperandCol.value = optimizerConfig.operandCol;
+            optFormatCommentCol.value = optimizerConfig.commentCol;
+
+            optimizerConfigModal.classList.remove('hidden');
+        });
+
+        // Close modal
+        const closeModal = () => {
+            optimizerConfigModal.classList.add('hidden');
+        };
+
+        optimizerConfigClose.addEventListener('click', closeModal);
+        optimizerConfigCancel.addEventListener('click', closeModal);
+
+        // Click outside modal to close
+        optimizerConfigModal.addEventListener('click', (e) => {
+            if (e.target === optimizerConfigModal) {
+                closeModal();
+            }
+        });
+
+        // Save config
+        optimizerConfigSave.addEventListener('click', () => {
+            optimizerConfig = {
+                jpToJr: optJpToJr.checked,
+                ldToXor: optLdToXor.checked,
+                peephole: optPeephole.checked,
+                deadCode: optDeadCode.checked,
+                rstVectors: optRstVectors.checked,
+                assistantPeephole: optAssistantPeephole.checked,
+                assistantWarnings: optAssistantWarnings.checked,
+                assistantFormatting: optAssistantFormatting.checked,
+                autoScan: optAutoScan.checked,
+                uppercaseDirectives: optFormatUppercaseDirectives.checked,
+                lowercaseOpcodes: optFormatLowercaseOpcodes.checked,
+                opcodeCol: parseInt(optFormatOpcodeCol.value) || 8,
+                operandCol: parseInt(optFormatOperandCol.value) || 16,
+                commentCol: parseInt(optFormatCommentCol.value) || 40
+            };
+
+            localStorage.setItem('optimizerConfig', JSON.stringify(optimizerConfig));
+            log('Optimizer configuration saved', 'success');
+            closeModal();
         });
 
         // Paste overwrite confirmation handler
@@ -632,6 +983,11 @@
         const exportSymbolsBtn = document.getElementById('export-symbols-btn');
         const consoleTab = document.getElementById('console-tab');
         const symbolsTab = document.getElementById('symbols-tab');
+        const assistantTab = document.getElementById('assistant-tab');
+        const assistantOutput = document.getElementById('assistant-output');
+        const scanCodeBtn = document.getElementById('scan-code-btn');
+        const formatCodeBtn = document.getElementById('format-code-btn');
+        const assistantSuggestions = document.getElementById('assistant-suggestions');
 
         // Mobile burger menu elements
         const burgerMenu = document.getElementById('burger-menu');
@@ -748,24 +1104,463 @@
 
         // --- Tab Management ---
         let activeTab = 'console';
-        
+
         const switchTab = (tabName) => {
             activeTab = tabName;
+            // Reset all tabs
+            consoleTab.classList.remove('active');
+            symbolsTab.classList.remove('active');
+            assistantTab.classList.remove('active');
+            consoleOutput.classList.add('hidden');
+            symbolsOutput.classList.add('hidden');
+            assistantOutput.classList.add('hidden');
+
+            // Activate selected tab
             if (tabName === 'console') {
                 consoleTab.classList.add('active');
-                symbolsTab.classList.remove('active');
                 consoleOutput.classList.remove('hidden');
-                symbolsOutput.classList.add('hidden');
-            } else {
+            } else if (tabName === 'symbols') {
                 symbolsTab.classList.add('active');
-                consoleTab.classList.remove('active');
-                consoleOutput.classList.add('hidden');
                 symbolsOutput.classList.remove('hidden');
+            } else if (tabName === 'assistant') {
+                assistantTab.classList.add('active');
+                assistantOutput.classList.remove('hidden');
             }
         };
 
         consoleTab.addEventListener('click', () => switchTab('console'));
         symbolsTab.addEventListener('click', () => switchTab('symbols'));
+        assistantTab.addEventListener('click', () => switchTab('assistant'));
+
+        // --- Optimization Assistant ---
+        // Known Z80 directives and opcodes for formatting (prefixed with FMT_ to avoid conflict with assembler's Z80_OPCODES)
+        const FMT_DIRECTIVES = ['CPU', 'FNAME', 'EQU', 'SET', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
+        const FMT_OPCODES = ['ADD', 'ADC', 'SUB', 'SBC', 'AND', 'OR', 'XOR', 'CP', 'INC', 'DEC', 'LD', 'PUSH', 'POP', 'EX', 'EXX', 'JP', 'JR', 'CALL', 'RET', 'RETI', 'RETN', 'RST', 'DJNZ', 'NOP', 'HALT', 'DI', 'EI', 'IM', 'NEG', 'CPL', 'SCF', 'CCF', 'DAA', 'RLA', 'RRA', 'RLCA', 'RRCA', 'RLD', 'RRD', 'LDI', 'LDIR', 'LDD', 'LDDR', 'CPI', 'CPIR', 'CPD', 'CPDR', 'IN', 'OUT', 'INI', 'IND', 'OUTI', 'OUTD', 'RLC', 'RRC', 'RL', 'RR', 'SLA', 'SRA', 'SLL', 'SRL', 'BIT', 'RES', 'SET'];
+        const FMT_REGISTERS = ['A', 'B', 'C', 'D', 'E', 'H', 'L', 'I', 'R', 'AF', 'BC', 'DE', 'HL', 'SP', 'IX', 'IY', "AF'", 'IXH', 'IXL', 'IYH', 'IYL'];
+        const FMT_CONDITIONS = ['NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M'];
+
+        // Optimization patterns grouped by category
+        const optimizationPatterns = {
+            peephole: [
+                {
+                    name: 'CP 0 to OR A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(cp|CP)\s+0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'OR A',
+                    replacement: (line) => line.replace(/\b(cp|CP)\s+0\b/, 'or a'),
+                    explanation: 'CP 0 (2 bytes, 7 T-states) can be replaced with OR A (1 byte, 4 T-states). Both set the Z flag if A=0.',
+                    savings: '1 byte, 3 T-states'
+                },
+                {
+                    name: 'LD A,0 to XOR A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(ld|LD)\s+[aA]\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'XOR A',
+                    replacement: (line) => line.replace(/\b(ld|LD)\s+[aA]\s*,\s*0\b/, 'xor a'),
+                    explanation: 'LD A,0 (2 bytes) can be replaced with XOR A (1 byte). Both set A=0.',
+                    savings: '1 byte, 3 T-states',
+                    warning: 'XOR A also affects flags (sets Z, clears C).'
+                },
+                {
+                    name: 'ADD A,0 is no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(add|ADD)\s+[aA]\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: ADD A,0 is no-op',
+                    explanation: 'ADD A,0 does nothing but waste cycles. Can be removed unless flags are needed.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Only remove if you don\'t need the flags.'
+                },
+                {
+                    name: 'SUB 0 is no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(sub|SUB)\s+0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: SUB 0 is no-op',
+                    explanation: 'SUB 0 does nothing but waste cycles. Can be removed unless flags are needed.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Only remove if you don\'t need the flags.'
+                },
+                {
+                    name: 'AND 255 is no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(and|AND)\s+(255|0xff|0FFh|\$ff)\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: AND 255 is no-op',
+                    explanation: 'AND 255 ($FF) does nothing to the value. Can be removed unless flags are needed.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Only remove if you don\'t need the flags.'
+                },
+                {
+                    name: 'OR 0 is no-op',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(or|OR)\s+0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Remove line',
+                    replacement: (line) => '; ' + line.trim() + ' ; REMOVED: OR 0 is no-op',
+                    explanation: 'OR 0 does nothing to the value. Can be removed unless flags are needed.',
+                    savings: '2 bytes, 7 T-states',
+                    warning: 'Only remove if you don\'t need the flags.'
+                }
+            ],
+            warnings: [
+                {
+                    name: 'Obsolete SECTION VIRTUAL',
+                    category: 'warnings',
+                    detect: (line) => /^\s*\.?section\s+virtual\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'SECTION BSS',
+                    replacement: (line) => line.replace(/\.?section\s+virtual/i, 'SECTION BSS'),
+                    explanation: 'SECTION VIRTUAL is obsolete. Use SECTION BSS instead - the standard term.',
+                    savings: 'Better compatibility'
+                }
+            ],
+            formatting: []
+        };
+
+        let currentSuggestions = [];
+
+        // Parse a line into components: label, directive/opcode, operands, comment
+        function parseLine(line) {
+            const result = { label: '', opcode: '', operands: '', comment: '', isDirective: false, isEmpty: false };
+
+            // Handle empty lines or comment-only lines
+            const trimmed = line.trim();
+            if (!trimmed) {
+                result.isEmpty = true;
+                return result;
+            }
+            if (trimmed.startsWith(';')) {
+                result.comment = trimmed;
+                return result;
+            }
+
+            // Extract comment first
+            const commentMatch = line.match(/^([^;]*)(;.*)$/);
+            let mainPart = line;
+            if (commentMatch) {
+                mainPart = commentMatch[1];
+                result.comment = commentMatch[2].trim();
+            }
+
+            // Check for label (starts at column 0 or ends with :)
+            const labelMatch = mainPart.match(/^([a-zA-Z_][a-zA-Z0-9_.]*):\s*/);
+            if (labelMatch) {
+                result.label = labelMatch[1];
+                mainPart = mainPart.substring(labelMatch[0].length);
+            } else if (/^[a-zA-Z_]/.test(mainPart) && !/^\s/.test(line)) {
+                // Label without colon at start of line (Zilog style)
+                const parts = mainPart.trim().split(/\s+/);
+                if (parts.length > 1) {
+                    const potentialLabel = parts[0];
+                    const potentialOpcode = parts[1].toUpperCase().replace(/^\./, '');
+                    if (FMT_OPCODES.includes(potentialOpcode) || FMT_DIRECTIVES.includes(potentialOpcode)) {
+                        result.label = potentialLabel;
+                        mainPart = parts.slice(1).join(' ');
+                    }
+                }
+            }
+
+            // Parse opcode and operands
+            const opcodeMatch = mainPart.trim().match(/^\.?([a-zA-Z]+)\s*(.*)?$/);
+            if (opcodeMatch) {
+                result.opcode = opcodeMatch[1];
+                result.operands = (opcodeMatch[2] || '').trim();
+                const upperOpcode = result.opcode.toUpperCase();
+                result.isDirective = FMT_DIRECTIVES.includes(upperOpcode);
+            }
+
+            return result;
+        }
+
+        // Format a single line according to style settings
+        function formatLine(line, config) {
+            const parsed = parseLine(line);
+
+            // Empty or comment-only lines
+            if (parsed.isEmpty) return '';
+            if (!parsed.opcode && parsed.comment) {
+                // Standalone comment - keep original indentation or align to opcode column
+                const leadingSpaces = line.match(/^(\s*)/)[1].length;
+                if (leadingSpaces === 0) return parsed.comment;
+                return ' '.repeat(config.opcodeCol) + parsed.comment;
+            }
+
+            // Apply case transformations
+            let opcode = parsed.opcode;
+            let operands = parsed.operands;
+
+            if (parsed.isDirective && config.uppercaseDirectives) {
+                opcode = opcode.toUpperCase();
+            } else if (!parsed.isDirective && config.lowercaseOpcodes) {
+                opcode = opcode.toLowerCase();
+                // Also lowercase registers in operands
+                operands = operands.replace(/\b(A|B|C|D|E|H|L|AF|BC|DE|HL|SP|IX|IY|IXH|IXL|IYH|IYL|AF'|I|R)\b/gi,
+                    (match) => match.toLowerCase());
+            }
+
+            // Build formatted line
+            let result = '';
+
+            // Label at column 0
+            if (parsed.label) {
+                result = parsed.label + ':';
+            }
+
+            // Opcode at opcode column
+            if (opcode) {
+                const currentLen = result.length;
+                if (currentLen < config.opcodeCol) {
+                    result += ' '.repeat(config.opcodeCol - currentLen);
+                } else {
+                    result += ' ';
+                }
+                result += opcode;
+            }
+
+            // Operands at operand column
+            if (operands) {
+                const currentLen = result.length;
+                if (currentLen < config.operandCol) {
+                    result += ' '.repeat(config.operandCol - currentLen);
+                } else {
+                    result += ' ';
+                }
+                result += operands;
+            }
+
+            // Comment at comment column
+            if (parsed.comment) {
+                const currentLen = result.length;
+                if (currentLen < config.commentCol) {
+                    result += ' '.repeat(config.commentCol - currentLen);
+                } else {
+                    result += ' ';
+                }
+                result += parsed.comment;
+            }
+
+            return result.trimEnd();
+        }
+
+        // Format entire code
+        function formatCode() {
+            const code = editor.getValue();
+            const lines = code.split('\n');
+            const config = {
+                uppercaseDirectives: optimizerConfig.uppercaseDirectives,
+                lowercaseOpcodes: optimizerConfig.lowercaseOpcodes,
+                opcodeCol: optimizerConfig.opcodeCol,
+                operandCol: optimizerConfig.operandCol,
+                commentCol: optimizerConfig.commentCol
+            };
+
+            const formatted = lines.map(line => formatLine(line, config));
+            editor.setValue(formatted.join('\n'));
+            log('Code formatted successfully', 'success');
+        }
+
+        // Detect if code has formatting issues (returns true/false, not individual issues)
+        function hasFormattingIssues() {
+            const code = editor.getValue();
+            const lines = code.split('\n');
+            let issueCount = 0;
+
+            for (const line of lines) {
+                const parsed = parseLine(line);
+                if (parsed.isEmpty || (!parsed.opcode && parsed.comment)) continue;
+
+                // Check case consistency
+                if (parsed.opcode) {
+                    const upperOpcode = parsed.opcode.toUpperCase();
+                    if (FMT_DIRECTIVES.includes(upperOpcode)) {
+                        if (optimizerConfig.uppercaseDirectives && parsed.opcode !== upperOpcode) {
+                            issueCount++;
+                        }
+                    } else if (FMT_OPCODES.includes(upperOpcode)) {
+                        if (optimizerConfig.lowercaseOpcodes && parsed.opcode !== parsed.opcode.toLowerCase()) {
+                            issueCount++;
+                        }
+                    }
+                }
+
+                // Check for mixed tabs and spaces
+                if (/^\t+ |\s+\t/.test(line)) {
+                    issueCount++;
+                }
+
+                // Early exit if we found issues
+                if (issueCount >= 3) break;
+            }
+
+            return issueCount;
+        }
+
+        function scanCodeForOptimizations() {
+            const code = editor.getValue();
+            const lines = code.split('\n');
+            const suggestions = [];
+
+            lines.forEach((line, index) => {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith(';')) return;
+                const lineNum = index + 1;
+
+                // Check peephole patterns
+                if (optimizerConfig.assistantPeephole) {
+                    optimizationPatterns.peephole.forEach(pattern => {
+                        if (pattern.detect(line)) {
+                            suggestions.push({ line: lineNum, original: trimmed, ...pattern });
+                        }
+                    });
+                }
+
+                // Check warning patterns
+                if (optimizerConfig.assistantWarnings) {
+                    optimizationPatterns.warnings.forEach(pattern => {
+                        if (pattern.detect(line)) {
+                            suggestions.push({ line: lineNum, original: trimmed, ...pattern });
+                        }
+                    });
+                }
+            });
+
+            // Check formatting issues - add single suggestion if issues found
+            if (optimizerConfig.assistantFormatting) {
+                const formattingIssueCount = hasFormattingIssues();
+                if (formattingIssueCount > 0) {
+                    suggestions.push({
+                        name: 'Code formatting',
+                        category: 'formatting',
+                        line: null,
+                        original: `${formattingIssueCount}+ formatting inconsistencies detected`,
+                        suggestion: 'Click "Format Code" button',
+                        explanation: 'Your code has inconsistent formatting (case, indentation, alignment). Use the Format Code button to automatically fix all formatting issues.',
+                        savings: 'Style consistency'
+                    });
+                }
+            }
+
+            return suggestions;
+        }
+
+        function renderSuggestions(suggestions) {
+            currentSuggestions = suggestions;
+
+            if (suggestions.length === 0) {
+                assistantSuggestions.innerHTML = '<p class="text-green-400 text-xs">No optimization opportunities found!</p>';
+                return;
+            }
+
+            // Group by category
+            const grouped = {
+                peephole: suggestions.filter(s => s.category === 'peephole'),
+                warnings: suggestions.filter(s => s.category === 'warnings'),
+                formatting: suggestions.filter(s => s.category === 'formatting')
+            };
+
+            const categoryTitles = {
+                peephole: { title: 'Peephole Optimizations', color: 'text-blue-400', border: 'border-blue-500' },
+                warnings: { title: 'Warnings & Best Practices', color: 'text-orange-400', border: 'border-orange-500' },
+                formatting: { title: 'Formatting Issues', color: 'text-purple-400', border: 'border-purple-500' }
+            };
+
+            let html = `<p class="text-yellow-400 text-xs mb-2">Found ${suggestions.length} suggestion${suggestions.length > 1 ? 's' : ''}:</p>`;
+
+            // Render each category
+            for (const [category, items] of Object.entries(grouped)) {
+                if (items.length === 0) continue;
+
+                const info = categoryTitles[category];
+                html += `<div class="mb-3"><div class="${info.color} text-xs font-bold mb-1">${info.title} (${items.length})</div>`;
+
+                items.forEach((s) => {
+                    const idx = suggestions.indexOf(s);
+                    // Special handling for formatting suggestion (no line number, no apply button)
+                    if (s.line === null) {
+                        html += `
+                        <div class="bg-gray-800 rounded p-2 mb-2 border-l-2 ${info.border}" id="suggestion-${idx}">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="${info.color} text-xs font-bold">${s.name}</span>
+                            </div>
+                            <div class="text-gray-300 text-xs bg-gray-900 p-1 rounded mb-1">${s.original}</div>
+                            <div class="text-gray-400 text-xs mb-1">${s.explanation}</div>
+                            <span class="text-green-400 text-xs">${s.suggestion}</span>
+                        </div>`;
+                    } else {
+                        html += `
+                        <div class="bg-gray-800 rounded p-2 mb-2 border-l-2 ${info.border}" id="suggestion-${idx}">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="${info.color} text-xs font-bold">Line ${s.line}: ${s.name}</span>
+                                <div class="flex gap-2">
+                                    <button class="goto-line-btn text-blue-400 hover:text-blue-300 text-xs" data-line="${s.line}">Go to</button>
+                                    <button class="apply-btn bg-green-600 hover:bg-green-500 text-white text-xs px-2 rounded" data-idx="${idx}">Apply</button>
+                                </div>
+                            </div>
+                            <div class="text-gray-300 text-xs font-mono bg-gray-900 p-1 rounded mb-1">${s.original.replace(/</g, '&lt;')}</div>
+                            <div class="text-gray-400 text-xs mb-1">${s.explanation}</div>
+                            <span class="text-green-400 text-xs">Use: <code class="bg-gray-700 px-1 rounded">${s.suggestion}</code></span>
+                            ${s.warning ? `<div class="text-orange-400 text-xs mt-1">${s.warning}</div>` : ''}
+                        </div>`;
+                    }
+                });
+                html += '</div>';
+            }
+            assistantSuggestions.innerHTML = html;
+
+            assistantSuggestions.querySelectorAll('.goto-line-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const lineNum = parseInt(btn.dataset.line);
+                    editor.setCursor(lineNum - 1, 0);
+                    editor.focus();
+                });
+            });
+
+            assistantSuggestions.querySelectorAll('.apply-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const idx = parseInt(btn.dataset.idx);
+                    const suggestion = currentSuggestions[idx];
+                    if (suggestion && suggestion.replacement) {
+                        const lineNum = suggestion.line - 1;
+                        const oldLine = editor.getLine(lineNum);
+                        const newLine = suggestion.replacement(oldLine);
+                        editor.replaceRange(newLine, {line: lineNum, ch: 0}, {line: lineNum, ch: oldLine.length});
+
+                        const card = document.getElementById(`suggestion-${idx}`);
+                        if (card) {
+                            card.classList.remove('border-yellow-500');
+                            card.classList.add('border-green-500', 'opacity-50');
+                            btn.textContent = 'Applied';
+                            btn.disabled = true;
+                            btn.classList.remove('bg-green-600', 'hover:bg-green-500');
+                            btn.classList.add('bg-gray-600');
+                        }
+                        log(`Applied optimization at line ${suggestion.line}: ${suggestion.name}`, 'info');
+                    }
+                });
+            });
+        }
+
+        scanCodeBtn.addEventListener('click', () => {
+            renderSuggestions(scanCodeForOptimizations());
+            switchTab('assistant');
+        });
+
+        formatCodeBtn.addEventListener('click', () => {
+            formatCode();
+            // Re-scan to update suggestions (formatting issues should be gone)
+            renderSuggestions(scanCodeForOptimizations());
+        });
+
+        // Auto-scan function for file open
+        function autoScanOnFileOpen() {
+            if (!optimizerConfig.autoScan) return;
+
+            const suggestions = scanCodeForOptimizations();
+            if (suggestions.length > 0) {
+                renderSuggestions(suggestions);
+                switchTab('assistant');
+                log(`Found ${suggestions.length} suggestion(s) - check Assistant tab`, 'info');
+            }
+        }
 
         // --- File Handling ---
         dropZone.addEventListener('dragover', (e) => {
@@ -1015,6 +1810,12 @@
                     editor.setValue(textContent);
                     editor.setOption('readOnly', false); // ONLY text files are editable
                     log(`Opened text file: ${filename}`);
+
+                    // Auto-scan for optimization opportunities on .asm/.z80 files
+                    const lower = filename.toLowerCase();
+                    if (lower.endsWith('.asm') || lower.endsWith('.z80')) {
+                        setTimeout(() => autoScanOnFileOpen(), 100);
+                    }
                 } catch (e) {
                     editor.setValue(`--- ERROR OPENING FILE: ${filename} ---\n\n${e.message}`);
                     // readOnly already set above
@@ -1097,9 +1898,10 @@
                 str = str.trim();
                 if (!str) return null;
 
-                // Reject expressions with arithmetic operators - these should be evaluated as expressions
+                // Reject expressions with operators - these should be evaluated as expressions
                 // Check for operators outside of quotes (but allow negative numbers with leading -)
-                if (/[\+\*\/]/.test(str) || (/-/.test(str.substring(1)))) {
+                // Include: arithmetic (+, *, /), bitwise (&, |, ^, ~, <<, >>), comparison (==, !=, <, >, <=, >=)
+                if (/[\+\*\/\&\|\^\~\<\>\=\!]/.test(str) || (/-/.test(str.substring(1)))) {
                     return null;  // This is an expression, not a simple number
                 }
 
@@ -1180,7 +1982,7 @@
                 this.code = code;
                 this.tokens = [];
                 this.numberParser = new NumberParser();
-                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN'];
+                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
                 this.tempSymbolCounters = {
                     named: 0,
                     plus: 0,
@@ -1238,7 +2040,36 @@
                 for (let part of parts) {
                     part = part.trim();
                     if (!part) continue;
-                    
+
+                    // Special case: INCBIN-style named parameters like "SKIP 128" or "READ 64"
+                    // These need to be split into two operands: keyword + value
+                    // But normal expressions like "($ - test1) == 256" should NOT be split
+                    // Strategy: Only split if it starts with an INCBIN keyword (SKIP, READ, FSIZE)
+                    if (part.includes(' ') && !part.startsWith('"') && !part.startsWith("'")) {
+                        const trimmed = part.trim();
+                        const firstWord = trimmed.split(/\s+/)[0].toUpperCase();
+
+                        // Only split if it starts with a known INCBIN parameter keyword
+                        if (firstWord === 'SKIP' || firstWord === 'READ' || firstWord === 'FSIZE') {
+                            // Split by spaces and recursively parse each sub-part
+                            const subParts = trimmed.split(/\s+/);
+                            for (const subPart of subParts) {
+                                if (!subPart) continue;
+
+                                // Parse each sub-part
+                                const subNum = this.numberParser.parseNumber(subPart);
+                                if (subNum !== null) {
+                                    operands.push(new Operand('immediate', subNum));
+                                } else {
+                                    operands.push(new Operand('symbol', subPart));
+                                }
+                            }
+                            continue; // Skip normal processing for this part
+                        }
+                        // Otherwise, treat the whole thing as a single symbol expression
+                        // This preserves expressions like "($ - test1) == 256"
+                    }
+
                     // Try to parse as number first
                     const numValue = this.numberParser.parseNumber(part);
                     if (numValue !== null) {
@@ -1265,19 +2096,23 @@
                     // Memory operands or parenthesized expressions
                     if (part.startsWith('(') && part.endsWith(')')) {
                         const innerContent = part.slice(1, -1);
-                        const innerNum = this.numberParser.parseNumber(innerContent);
-                        if (innerNum !== null) {
-                            operands.push(new Operand('memory', innerNum));
-                        } else {
-                            // Check if this contains bitwise operators (NOT valid for memory addressing)
-                            // Note: + and - are OK for address offsets like (symbol+1), (IX+d)
-                            // But &, |, ^, *, /, %, <<, >> indicate it's an expression to evaluate
-                            const hasBitwiseOps = /[\&\|\^\*\/\%]|<<|>>/.test(innerContent);
 
-                            if (hasBitwiseOps) {
-                                // This is a parenthesized expression like (str_buffer & 0xff), not memory access
-                                // Strip parentheses and treat as symbol expression
-                                operands.push(new Operand('symbol', innerContent));
+                        // Check if this contains operators (NOT valid for memory addressing)
+                        // Note: + and - are OK for address offsets like (symbol+1), (IX+d)
+                        // But &, |, ^, *, /, %, <<, >>, ==, !=, >=, <=, <, > indicate it's an expression to evaluate
+                        // Note: < and > can also be low/high byte operators, but that's fine - they still indicate an expression
+                        // IMPORTANT: Check this BEFORE parseNumber, because parseNumber might parse partial expression
+                        const hasExpressionOps = /[\&\|\^\*\/\%\<\>]|<<|>>|==|!=|>=|<=/.test(innerContent);
+
+                        if (hasExpressionOps) {
+                            // This is a parenthesized expression like (str_buffer & 0xff) or ($8000 >= $8000), not memory access
+                            // Strip parentheses and treat as symbol expression
+                            operands.push(new Operand('symbol', innerContent));
+                        } else {
+                            // Try to parse as a plain number for direct memory addressing like ($C000)
+                            const innerNum = this.numberParser.parseNumber(innerContent);
+                            if (innerNum !== null) {
+                                operands.push(new Operand('memory', innerNum));
                             } else {
                                 // It's a symbol inside parentheses - valid indirect addressing like (HL), (IX+d), (addr+offset)
                                 operands.push(new Operand('memory', innerContent));
@@ -1526,10 +2361,12 @@
                 this.macroTable = {};
                 this.symbolTable = {};
                 this.constantTable = {}; // Separate table for SET/EQU values
+                this.structTable = {}; // Structure definitions (STRUCT/ENDSTRUCT)
                 this.fileMap = [];
                 this.symbolInfo = {};
                 this.pc = 0;
                 this.output = [];
+                this.breakpointsToInject = new Set(); // Breakpoints to inject as ld b,b (0x40)
                 this.firstOrg = null;                
                 this.currentPass = 0;
                 this.currentFile = '';
@@ -1553,7 +2390,16 @@
                 this.lastNonTempSymbol = '';
                 this.macroCounter = 0; // For unique macro labels with @
                 this.numberParser = new NumberParser();
-                this.currentSection = 'CODE'; // Track current section: 'CODE' or 'VIRTUAL'
+                this.currentSection = 'CODE'; // Track current section: 'CODE', 'DATA', or 'BSS'
+                this.lineToAddressMap = new Map(); // Map source line numbers to assembled addresses
+            }
+
+            setBreakpoints(breakpointsSet) {
+                // Convert 0-based breakpoint line numbers to 1-based for assembly
+                this.breakpointsToInject.clear();
+                for (const lineNum of breakpointsSet) {
+                    this.breakpointsToInject.add(lineNum + 1); // Convert to 1-based
+                }
             }
 
             buildImage({ mode = 'range', base = null, size = null, fill = 0xFF } = {}) {
@@ -1588,9 +2434,55 @@
                 return out;
             }
 
+            // Post-compilation ROM patcher: Patch RST vector trampolines in ColecoVision header
+            patchRstVectors(rom, rstMapping) {
+                // ColecoVision RST vector locations in ROM header
+                const rstOffsets = {
+                    0x08: 0x0C, // RST $08 at offset $0C (address $800C)
+                    0x10: 0x0F, // RST $10 at offset $0F (address $800F)
+                    0x18: 0x12, // RST $18 at offset $12 (address $8012)
+                    0x20: 0x15, // RST $20 at offset $15 (address $8015)
+                    0x28: 0x18, // RST $28 at offset $18 (address $8018)
+                    0x30: 0x1B  // RST $30 at offset $1B (address $801B)
+                    // RST $38 at $1E is RESERVED - never patch!
+                };
+
+                // Create a copy of ROM to modify
+                const patched = new Uint8Array(rom);
+
+                // For each RST vector in the mapping, patch the ROM header
+                for (const [biosAddr, rstCode] of rstMapping.entries()) {
+                    const offset = rstOffsets[rstCode];
+                    if (offset === undefined) {
+                        log(`  WARNING: Invalid RST code $${rstCode.toString(16).toUpperCase()}`, 'warn');
+                        continue;
+                    }
+
+                    // Generate JP opcode: C3 + low byte + high byte
+                    patched[offset] = 0xC3; // JP opcode
+                    patched[offset + 1] = biosAddr & 0xFF; // Low byte
+                    patched[offset + 2] = (biosAddr >> 8) & 0xFF; // High byte
+
+                    log(`  Patched RST $${rstCode.toString(16).toUpperCase()} at offset $${offset.toString(16).toUpperCase()}: JP $${biosAddr.toString(16).toUpperCase()}`, 'debug');
+                }
+
+                // Also patch RST $38 with RETI if it's still RET+NOP+NOP
+                const rst38Offset = 0x1E;
+                if (patched[rst38Offset] === 0xC9 && patched[rst38Offset + 1] === 0x00) {
+                    // Replace RET+NOP with RETI (ED 4D)
+                    patched[rst38Offset] = 0xED;
+                    patched[rst38Offset + 1] = 0x4D;
+                    // Keep third byte as NOP (or leave as-is)
+                    log(`  Patched RST $38 with RETI (reserved for spinner interrupt)`, 'debug');
+                }
+
+                return patched;
+            }
 
             async assemble(mainFile) {
                 try {
+                    // Reset state for new compilation
+                    this.fileMap = [];
                     this.currentFile = mainFile;
                     this.currentPass = 1;
                     log(`--- Pass 1: Conditional processing and macro expansion for ${mainFile} ---`);
@@ -1614,7 +2506,107 @@
                     this.currentPass = 2;
                     log('--- Pass 2: Building symbol table ---');
                     this.buildSymbolTable(tokens);
-                    
+
+                    // Pass 2.5: Code optimization (if enabled)
+                    // Read current checkbox state (don't rely on old variable)
+                    const isOptimizerEnabled = document.getElementById('optimizer-toggle').checked;
+                    let optimizer = null; // Declare outside if block so it's accessible later
+                    if (isOptimizerEnabled) {
+                        log('--- Pass 2.5: Optimizing code ---');
+                        optimizer = new Z80Optimizer(this, optimizerConfig);
+
+                        // Phase 1: Optimizations that don't depend on final addresses
+                        tokens = optimizer.optimizePhase1(tokens);
+
+                        // Rebuild symbol table after phase 1 (dead code, RST, peephole)
+                        this.symbolTable = {};
+                        this.constantTable = {};
+                        this.symbolInfo = {};
+                        this.fileMap = [];
+                        this.pc = 0;
+                        this.buildSymbolTable(tokens);
+
+                        // Update optimizer's symbol table reference
+                        optimizer.symbolTable = this.symbolTable;
+
+                        // Phase 2: Address-dependent optimizations (JP→JR, LD A,0→XOR A)
+                        // Use iterative approach: JP→JR changes addresses, so we need to
+                        // rebuild symbol table and re-optimize until no more changes occur
+                        let previousJpToJr = -1;
+                        let iteration = 0;
+                        const maxIterations = 10; // Safety limit
+
+                        // Save address mapping before optimization for comparison
+                        const symbolsBefore = {...this.symbolTable};
+
+                        do {
+                            previousJpToJr = optimizer.stats.jpToJr;
+
+                            // Reset counters for this iteration
+                            optimizer.stats.jpToJr = 0;
+                            optimizer.stats.ldToXor = 0;
+
+                            // Optimize based on current tokens (first iteration uses phase1 output)
+                            tokens = optimizer.optimizePhase2(tokens);
+
+                            // Rebuild symbol table after optimizations
+                            this.symbolTable = {};
+                            this.constantTable = {};
+                            this.symbolInfo = {};
+                            this.fileMap = [];
+                            this.pc = 0;
+                            this.buildSymbolTable(tokens);
+
+                            // Update optimizer's symbol table reference
+                            optimizer.symbolTable = this.symbolTable;
+
+                            iteration++;
+                            log(`  Iteration ${iteration}: ${optimizer.stats.jpToJr} JP→JR conversions`, 'debug');
+                        } while (optimizer.stats.jpToJr > 0 && optimizer.stats.jpToJr !== previousJpToJr && iteration < maxIterations);
+
+                        // Show address shifts for labels that moved
+                        log(`Address mapping (labels that moved):`, 'debug');
+                        const movedLabels = [];
+                        for (const label in this.symbolTable) {
+                            if (symbolsBefore[label] !== undefined && symbolsBefore[label] !== this.symbolTable[label]) {
+                                const shift = this.symbolTable[label] - symbolsBefore[label];
+                                movedLabels.push(`${label}: $${symbolsBefore[label].toString(16)} → $${this.symbolTable[label].toString(16)} (${shift >= 0 ? '+' : ''}${shift})`);
+                            }
+                        }
+                        if (movedLabels.length > 0) {
+                            movedLabels.slice(0, 10).forEach(line => log(`  ${line}`, 'debug'));
+                            if (movedLabels.length > 10) {
+                                log(`  ... and ${movedLabels.length - 10} more labels`, 'debug');
+                            }
+                        } else {
+                            log(`  No labels moved`, 'debug');
+                        }
+
+                        // Log optimization statistics
+                        const s = optimizer.stats;
+                        log(`Optimizations applied:`, 'success');
+                        if (s.jpToJr > 0) log(`  JP→JR: ${s.jpToJr} conversion${s.jpToJr > 1 ? 's' : ''}`, 'info');
+                        if (s.ldToXor > 0) log(`  LD A,0→XOR A: ${s.ldToXor} conversion${s.ldToXor > 1 ? 's' : ''}`, 'info');
+                        if (s.deadCodeRemoved > 0) log(`  Dead code: ${s.deadCodeRemoved} instruction${s.deadCodeRemoved > 1 ? 's' : ''} removed`, 'info');
+                        if (s.peepholeOpts > 0) log(`  Peephole: ${s.peepholeOpts} optimization${s.peepholeOpts > 1 ? 's' : ''}`, 'info');
+                        if (s.callMerge > 0) log(`  CALL merge: ${s.callMerge} routine${s.callMerge > 1 ? 's' : ''} inlined`, 'info');
+                        if (s.rstOptimized > 0) log(`  RST vectors: ${s.rstVectorsUsed} vector${s.rstVectorsUsed > 1 ? 's' : ''} repurposed, ${s.rstOptimized} call${s.rstOptimized > 1 ? 's' : ''} → RST`, 'info');
+                        log(`  Total bytes saved: ${s.bytesSaved}`, 'success');
+
+                        // Update bytes saved display
+                        const bytesSavedDisplay = document.getElementById('bytes-saved-display');
+                        if (s.bytesSaved > 0) {
+                            bytesSavedDisplay.textContent = `💾 -${s.bytesSaved} byte${s.bytesSaved > 1 ? 's' : ''}`;
+                            bytesSavedDisplay.classList.remove('hidden');
+                        } else {
+                            bytesSavedDisplay.classList.add('hidden');
+                        }
+                    } else {
+                        // Optimizer disabled - hide bytes saved display
+                        const bytesSavedDisplay = document.getElementById('bytes-saved-display');
+                        bytesSavedDisplay.classList.add('hidden');
+                    }
+
                     this.currentPass = 3;
                     log('--- Pass 3: Generating binary code ---');
                     this.generateCode(tokens);
@@ -1631,12 +2623,51 @@
                         log('Generated raw binary (no packaging)', 'info');
                     }
 
+                    // Post-compilation ROM patching: Patch RST vectors if optimizer created mapping
+                    if (isOptimizerEnabled && optimizer && optimizer.rstMapping && optimizer.rstMapping.size > 0) {
+                        compiledBinary = this.patchRstVectors(compiledBinary, optimizer.rstMapping);
+                    }
+
                     // Platform-specific validation
                     if (platformConfig.validateHeader === 'coleco') {
                         const headerInfo = validateColecoHeader(compiledBinary);
                         if (headerInfo.valid) {
                             log(`Valid ColecoVision ROM: ${headerInfo.usesDefaultScreen ? 'With' : 'Without'} default title screen`, 'success');
                         }
+
+                        // DEBUG: Dump first 33 bytes of ROM header
+                        log(`  DEBUG: ColecoVision ROM Header ($8000-$8020):`, 'debug');
+                        const headerBytes = [];
+                        for (let i = 0; i < 33 && i < compiledBinary.length; i++) {
+                            headerBytes.push(compiledBinary[i].toString(16).padStart(2, '0').toUpperCase());
+                        }
+                        // Display in rows of 16 bytes
+                        for (let row = 0; row < 3; row++) {
+                            const start = row * 16;
+                            const end = Math.min(start + 16, headerBytes.length);
+                            const addr = (0x8000 + start).toString(16).toUpperCase().padStart(4, '0');
+                            const bytes = headerBytes.slice(start, end).join(' ');
+                            log(`    $${addr}: ${bytes}`, 'debug');
+                        }
+                        // Decode RST vectors
+                        log(`  DEBUG: RST Vector Contents:`, 'debug');
+                        const rstLocs = [
+                            { addr: 0x0C, name: 'RST $08' },
+                            { addr: 0x0F, name: 'RST $10' },
+                            { addr: 0x12, name: 'RST $18' },
+                            { addr: 0x15, name: 'RST $20' },
+                            { addr: 0x18, name: 'RST $28' },
+                            { addr: 0x1B, name: 'RST $30' },
+                            { addr: 0x1E, name: 'RST $38' }
+                        ];
+                        rstLocs.forEach(rst => {
+                            if (rst.addr + 2 < compiledBinary.length) {
+                                const b1 = compiledBinary[rst.addr].toString(16).padStart(2, '0').toUpperCase();
+                                const b2 = compiledBinary[rst.addr + 1].toString(16).padStart(2, '0').toUpperCase();
+                                const b3 = compiledBinary[rst.addr + 2].toString(16).padStart(2, '0').toUpperCase();
+                                log(`    ${rst.name} ($${(0x8000 + rst.addr).toString(16).toUpperCase()}): ${b1} ${b2} ${b3}`, 'debug');
+                            }
+                        });
                     }
 
                     // --- Size metrics calculation ---
@@ -1698,6 +2729,8 @@
                 let expandedSource = '';
                 let inMacro = false;
                 let currentMacro = null;
+                let inStruct = false;
+                let currentStruct = null;
                 let conditionalStack = [];
                 let currentConditionState = true;
 
@@ -1752,6 +2785,60 @@
                         } else {
                             currentMacro.body.push(line);
                         }
+                    } else if (inStruct) {
+                        if (mnemonic === 'endstruct' || mnemonic === 'ends') {
+                            inStruct = false;
+                            this.structTable[currentStruct.name] = currentStruct;
+                            log(`Defined structure: ${currentStruct.name} (size: ${currentStruct.size} bytes)`);
+                            currentStruct = null;
+                        } else {
+                            // Parse field definition: fieldName DB/DW/DS size
+                            const fieldMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+(DB|DW|DS|DEFB|DEFW|DEFS)\s+(.+)$/i);
+                            if (fieldMatch) {
+                                const fieldName = fieldMatch[1];
+                                const fieldType = fieldMatch[2].toUpperCase();
+                                // Strip comments from field size
+                                const fieldSize = fieldMatch[3].split(';')[0].trim();
+
+                                let fieldBytes = 0;
+                                if (fieldType === 'DB' || fieldType === 'DEFB') {
+                                    // DB: 1 byte per element
+                                    try {
+                                        const count = this.evaluateExpressionSimple(fieldSize);
+                                        fieldBytes = count;
+                                    } catch (e) {
+                                        fieldBytes = 1; // Default to 1 byte if can't evaluate
+                                    }
+                                } else if (fieldType === 'DW' || fieldType === 'DEFW') {
+                                    // DW: 2 bytes per element
+                                    try {
+                                        const count = this.evaluateExpressionSimple(fieldSize);
+                                        fieldBytes = count * 2;
+                                    } catch (e) {
+                                        fieldBytes = 2; // Default to 2 bytes
+                                        log(`  Field ${fieldName} DW ${fieldSize} -> FAILED, using default 2 bytes: ${e.message}`, 'warn');
+                                    }
+                                } else if (fieldType === 'DS' || fieldType === 'DEFS') {
+                                    // DS: reserve N bytes
+                                    try {
+                                        fieldBytes = this.evaluateExpressionSimple(fieldSize);
+                                    } catch (e) {
+                                        fieldBytes = 1;
+                                    }
+                                }
+
+                                currentStruct.fields.push({
+                                    name: fieldName,
+                                    offset: currentStruct.size,
+                                    size: fieldBytes
+                                });
+                                currentStruct.size += fieldBytes;
+                            }
+                        }
+                    } else if (mnemonic === 'struct') {
+                        inStruct = true;
+                        const structName = parts[1];
+                        currentStruct = { name: structName, fields: [], size: 0 };
                     } else if (mnemonic === 'macro') {
                         inMacro = true;
                         // Normalize macro name to lowercase for case-insensitive matching
@@ -1778,6 +2865,20 @@
                             const index = parseInt(num) - 1; // \1 is args[0]
                             return args[index] !== undefined ? args[index] : match;
                         });
+
+                        // Replace named parameters with their argument values
+                        // Support both numbered (\1) and named (paramName) parameters
+                        if (macro.params) {
+                            for (let i = 0; i < macro.params.length; i++) {
+                                const paramName = macro.params[i].trim();
+                                if (paramName && args[i] !== undefined) {
+                                    // Use word boundaries to match whole parameter names only
+                                    const regex = new RegExp(`\\b${paramName}\\b`, 'g');
+                                    macroBody = macroBody.replace(regex, args[i]);
+                                }
+                            }
+                        }
+
                         expandedSource += `; === MACRO EXPANSION: ${mnemonic} ===\n`;
                         expandedSource += macroBody + '\n';
                         expandedSource += `; === END MACRO: ${mnemonic} ===\n`;
@@ -1786,6 +2887,28 @@
                         const condResult = this.evaluateCondition(condExpr);
                         conditionalStack.push({
                             condition: condResult,
+                            hasElse: false,
+                            line: lineIdx + 1
+                        });
+                        currentConditionState = this.calculateCurrentConditionState(conditionalStack);
+                    } else if (mnemonic === 'ifdef') {
+                        // IFDEF: Check if symbol is defined
+                        const symbolName = parts.slice(1).join(' ').trim();
+                        const isDefined = this.constantTable.hasOwnProperty(symbolName) ||
+                                         this.symbolTable.hasOwnProperty(symbolName);
+                        conditionalStack.push({
+                            condition: isDefined,
+                            hasElse: false,
+                            line: lineIdx + 1
+                        });
+                        currentConditionState = this.calculateCurrentConditionState(conditionalStack);
+                    } else if (mnemonic === 'ifndef') {
+                        // IFNDEF: Check if symbol is NOT defined
+                        const symbolName = parts.slice(1).join(' ').trim();
+                        const isDefined = this.constantTable.hasOwnProperty(symbolName) ||
+                                         this.symbolTable.hasOwnProperty(symbolName);
+                        conditionalStack.push({
+                            condition: !isDefined,
                             hasElse: false,
                             line: lineIdx + 1
                         });
@@ -1870,7 +2993,26 @@
                         }
                         expandedSource += `; === END TIMES ===\n`;
                     } else {
-                        expandedSource += line + '\n';
+                        // Check if this is a structure instance declaration
+                        // Case 1: "label: StructType" or "label StructType" (with label)
+                        // Case 2: "StructType" (unlabeled instance)
+                        const structInstanceMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*:?\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|$)/);
+                        if (structInstanceMatch && this.structTable[structInstanceMatch[2]]) {
+                            // Labeled structure instance
+                            const label = structInstanceMatch[1];
+                            const structType = structInstanceMatch[2];
+                            expandedSource += `${label}: STRUCT ${structType}\n`;
+                        } else {
+                            // Check for unlabeled structure instance: just "StructType"
+                            const unlabeledMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|$)/);
+                            if (unlabeledMatch && this.structTable[unlabeledMatch[1]]) {
+                                // Unlabeled structure instance
+                                const structType = unlabeledMatch[1];
+                                expandedSource += `STRUCT ${structType}\n`;
+                            } else {
+                                expandedSource += line + '\n';
+                            }
+                        }
                     }
                 }
                 
@@ -2060,8 +3202,22 @@
                 this.symbolTable = {};
                 this.constantTable = {};
                 this.symbolInfo = {};
+                this.fileMap = [];
                 let currentSourceFile = 'main';
-                
+
+                // Create SIZEOF symbols for all defined structures
+                for (const structName in this.structTable) {
+                    const structDef = this.structTable[structName];
+                    this.symbolTable[`SIZEOF_${structName}`] = structDef.size;
+                    this.constantTable[`SIZEOF_${structName}`] = structDef.size;
+                    this.symbolInfo[`SIZEOF_${structName}`] = {
+                        value: structDef.size,
+                        lineNumber: 0,
+                        filename: currentSourceFile,
+                        type: 'constant'
+                    };
+                }
+
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
@@ -2095,13 +3251,12 @@
                                     const oldPC_pass2 = this.pc;
                                     const newPC_pass2 = this.evaluateExpression(token.operands[0]);
 
-                                    // Auto-detect VIRTUAL section based on ORG address
-                                    // If ORG goes backward or to RAM area, it's VIRTUAL
+                                    // Auto-detect BSS section: backward ORG or to RAM area
                                     if (this.firstOrg === null) this.firstOrg = newPC_pass2;
                                     if (newPC_pass2 < oldPC_pass2 || newPC_pass2 < this.firstOrg) {
-                                        this.currentSection = 'VIRTUAL';
+                                        this.currentSection = 'BSS';  // Auto-detect BSS on backward ORG
                                     } else if (newPC_pass2 >= this.firstOrg) {
-                                        this.currentSection = 'CODE';
+                                        this.currentSection = 'CODE';  // Return to CODE on forward ORG
                                     }
 
                                     this.pc = newPC_pass2;
@@ -2173,34 +3328,95 @@
                                     break;
                                 case 'DS': case 'DEFS':
                                     // DS/DEFS: Reserve space for RAM variables
-                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
-                                    if (this.currentSection !== 'VIRTUAL') {
-                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    // Can ONLY be used in BSS sections (RAM), NOT in CODE/DATA sections (ROM)
+                                    if (this.currentSection !== 'BSS') {
+                                        throw new Error(`DS directive at line ${this.currentLine} can only be used in BSS section (RAM). ROM is read-only and cannot contain variables. Use 'SECTION BSS' before DS directives.`);
                                     }
                                     this.pc += this.evaluateExpression(token.operands[0]);
                                     break;
                                 case 'INCBIN':
-                                    const filename = token.operands[0].value;
-                                    const fileData = this.findFile(filename);
+                                    // Enhanced INCBIN with SKIP, READ, FSIZE parameters (WLA-DX style)
+                                    const incbinFilename = token.operands[0].value;
+                                    const incbinFullData = this.findFile(incbinFilename);
+
+                                    // Parse optional SKIP and READ parameters
+                                    let incbinSkip = 0;
+                                    let incbinRead = incbinFullData.length;
+                                    let incbinFsizeLabel = null;
+
+                                    // Check for named parameters (SKIP, READ, FSIZE) in any order
+                                    for (let i = 1; i < token.operands.length; i++) {
+                                        const operand = token.operands[i];
+                                        if (operand.type === 'symbol') {
+                                            const paramName = operand.value.toUpperCase();
+                                            if (paramName === 'SKIP' && i + 1 < token.operands.length) {
+                                                const skipValue = this.evaluateExpression(token.operands[i + 1]);
+                                                incbinSkip = skipValue < 0 ? incbinFullData.length + skipValue : skipValue;
+                                                i++; // Skip next operand (value)
+                                            } else if (paramName === 'READ' && i + 1 < token.operands.length) {
+                                                const readValue = this.evaluateExpression(token.operands[i + 1]);
+                                                incbinRead = readValue < 0 ? incbinFullData.length + readValue - incbinSkip : readValue;
+                                                i++; // Skip next operand (value)
+                                            } else if (paramName === 'FSIZE' && i + 1 < token.operands.length) {
+                                                incbinFsizeLabel = token.operands[i + 1].value;
+                                                i++; // Skip next operand (label name)
+                                            }
+                                        }
+                                    }
+
+                                    // Validate range
+                                    if (incbinSkip < 0 || incbinSkip >= incbinFullData.length) {
+                                        throw new Error(`INCBIN SKIP value ${incbinSkip} is out of range for file ${incbinFilename} (size: ${incbinFullData.length})`);
+                                    }
+                                    if (incbinRead < 0) {
+                                        throw new Error(`INCBIN READ value ${incbinRead} is invalid (after negative offset calculation)`);
+                                    }
+                                    if (incbinSkip + incbinRead > incbinFullData.length) {
+                                        incbinRead = incbinFullData.length - incbinSkip;
+                                    }
+
+                                    // Create FSIZE symbol if requested
+                                    if (incbinFsizeLabel) {
+                                        this.symbolTable[incbinFsizeLabel] = incbinRead;
+                                        this.symbolInfo[incbinFsizeLabel] = {
+                                            value: incbinRead,
+                                            lineNumber: this.currentLine,
+                                            filename: this.currentFile,
+                                            type: 'constant'
+                                        };
+                                    }
+
                                     const incbinStartAddr = this.pc;
-                                    this.pc += fileData.length;
-                                    // Track binary file inclusion
+                                    this.pc += incbinRead;
+
+                                    // Track binary file inclusion with range info
                                     this.fileMap.push({
-                                        filename: filename,
+                                        filename: incbinFilename,
                                         startAddr: incbinStartAddr,
                                         endAddr: this.pc,
-                                        size: fileData.length,
-                                        type: 'binary'
+                                        size: incbinRead,
+                                        type: 'binary',
+                                        skip: incbinSkip,
+                                        totalSize: incbinFullData.length
                                     });
                                     break;
                                 case 'RADIX':
                                     this.numberParser.defaultRadix = this.evaluateExpression(token.operands[0]);
                                     break;
                                 case 'SECTION':
-                                    // Handle .section VIRTUAL / .section CODE
+                                    // Handle SECTION directive: CODE, DATA, BSS (v2.0.0)
                                     if (token.operands.length > 0) {
                                         const sectionName = token.operands[0].value.toUpperCase();
-                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                        const validSections = ['CODE', 'DATA', 'BSS'];
+
+                                        if (!validSections.includes(sectionName)) {
+                                            throw new Error(`SECTION directive at line ${this.currentLine}: Invalid section '${sectionName}'. Valid sections: CODE, DATA, BSS`);
+                                        }
+
+                                        this.currentSection = sectionName;
+                                        log(`Switched to ${this.currentSection} section`, 'info');
+                                    } else {
+                                        throw new Error(`SECTION directive at line ${this.currentLine}: Requires a section name (CODE, DATA, or BSS)`);
                                     }
                                     break;
                                 case 'ALIGN':
@@ -2211,6 +3427,63 @@
                                     }
                                     const alignPadding = (alignBoundary - (this.pc % alignBoundary)) % alignBoundary;
                                     this.pc += alignPadding;
+                                    break;
+                                case 'ASSERT':
+                                    // ASSERT directive: validate condition at compile time
+                                    // Syntax: ASSERT expression [, "error message"]
+                                    if (token.operands.length === 0) {
+                                        throw new Error(`ASSERT directive at line ${this.currentLine}: Missing expression`);
+                                    }
+
+                                    const assertCondition = this.evaluateExpression(token.operands[0]);
+                                    if (!assertCondition) {
+                                        // Get custom error message if provided
+                                        let assertMsg = 'Assertion failed';
+                                        if (token.operands.length > 1 && token.operands[1].type === 'string') {
+                                            assertMsg = token.operands[1].value;
+                                        }
+                                        throw new Error(`ASSERT failed at line ${this.currentLine}: ${assertMsg}`);
+                                    }
+                                    // ASSERT passes - no PC change, no output
+                                    break;
+                                case 'STRUCT':
+                                    // Structure definitions are processed in Pass 1 (macro expansion)
+                                    // But structure instances are handled here in Pass 2
+                                    // Syntax: labelName StructType (labeled) or StructType (unlabeled)
+                                    if (token.operands.length > 0) {
+                                        const structType = token.operands[0].value;
+                                        const structDef = this.structTable[structType];
+
+                                        if (structDef) {
+                                            // Create field offset symbols only if labeled: labelName.fieldName = PC + offset
+                                            if (token.label) {
+                                                const baseAddr = this.pc;
+                                                for (const field of structDef.fields) {
+                                                    const fieldSymbol = `${token.label}.${field.name}`;
+                                                    this.symbolTable[fieldSymbol] = baseAddr + field.offset;
+                                                    this.symbolInfo[fieldSymbol] = {
+                                                        address: baseAddr + field.offset,
+                                                        file: currentSourceFile,
+                                                        lineNumber: this.currentLine,
+                                                        type: 'struct_field',
+                                                        size: field.size,
+                                                        structType: structType
+                                                    };
+                                                }
+                                            }
+
+                                            // SIZEOF symbol already created at start of Pass 2
+
+                                            // Advance PC by structure size (labeled or unlabeled)
+                                            this.pc += structDef.size;
+                                        } else {
+                                            throw new Error(`Undefined structure type: ${structType} at line ${this.currentLine}`);
+                                        }
+                                    }
+                                    // If no operands, it's just the definition (already processed in Pass 1)
+                                    break;
+                                case 'ENDSTRUCT':
+                                    // Structure end - already processed in Pass 1
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -2306,7 +3579,10 @@
                 
                 for (const symbol of sortedSymbols) {
                     const info = this.symbolInfo[symbol];
-                    output += `${symbol.padEnd(25)}${info.address.toString(16).toUpperCase().padStart(4, '0')}   ${info.file.padEnd(12)} ${info.lineNumber.toString().padStart(4)} ${info.type.padEnd(9)} ${info.size}\n`;
+                    const addr = (info.address !== undefined ? info.address : info.value || 0);
+                    const file = info.file || info.filename || 'N/A';
+                    const size = info.size !== undefined ? info.size : '';
+                    output += `${symbol.padEnd(25)}${addr.toString(16).toUpperCase().padStart(4, '0')}   ${file.padEnd(12)} ${info.lineNumber.toString().padStart(4)} ${info.type.padEnd(9)} ${size}\n`;
                 }
                 
                 symbolsOutput.innerHTML = output;
@@ -2341,12 +3617,12 @@
 
                                     if (this.firstOrg === null) this.firstOrg = newPC_pass3;   // remember first ORG
 
-                                    // Auto-detect VIRTUAL section based on ORG address
-                                    // If ORG goes backward or to RAM area, it's VIRTUAL
+                                    // Auto-detect BSS section based on ORG address
+                                    // If ORG goes backward or to RAM area, it's BSS
                                     if (newPC_pass3 < oldPC_pass3 || newPC_pass3 < this.firstOrg) {
-                                        this.currentSection = 'VIRTUAL';
+                                        this.currentSection = 'BSS';  // Auto-detect BSS on backward ORG
                                     } else if (newPC_pass3 >= this.firstOrg) {
-                                        this.currentSection = 'CODE';
+                                        this.currentSection = 'CODE';  // Return to CODE on forward ORG
                                     }
 
                                     this.pc = newPC_pass3;
@@ -2370,24 +3646,63 @@
                                     break;
                                 case 'DS': case 'DEFS':
                                     // DS/DEFS: Reserve space for RAM variables
-                                    // Can ONLY be used in VIRTUAL sections (RAM), NOT in CODE sections (ROM)
-                                    if (this.currentSection !== 'VIRTUAL') {
-                                        throw new Error(`.DS directive at line ${this.currentLine} can only be used in VIRTUAL sections (RAM). ROM is read-only and cannot contain variables. Use .section VIRTUAL before .DS directives.`);
+                                    // Can ONLY be used in BSS sections (RAM), NOT in CODE/DATA sections (ROM)
+                                    if (this.currentSection !== 'BSS') {
+                                        throw new Error(`DS directive at line ${this.currentLine} can only be used in BSS section (RAM). ROM is read-only and cannot contain variables. Use 'SECTION BSS' before DS directives.`);
                                     }
                                     const size = this.evaluateExpression(token.operands[0]);
                                     // Advance PC to reserve RAM space, but don't output any bytes
                                     this.pc += size;
                                     break;
                                 case 'INCBIN':
-                                    const filename = token.operands[0].value;
-                                    const fileData = this.findFile(filename);
-                                    this.output.push(...fileData);
+                                    // Enhanced INCBIN with SKIP, READ, FSIZE parameters (WLA-DX style)
+                                    const incbinFilename_p3 = token.operands[0].value;
+                                    const incbinFullData_p3 = this.findFile(incbinFilename_p3);
+
+                                    // Parse optional SKIP and READ parameters (same as Pass 2)
+                                    let incbinSkip_p3 = 0;
+                                    let incbinRead_p3 = incbinFullData_p3.length;
+
+                                    for (let i = 1; i < token.operands.length; i++) {
+                                        const operand = token.operands[i];
+                                        if (operand.type === 'symbol') {
+                                            const paramName = operand.value.toUpperCase();
+                                            if (paramName === 'SKIP' && i + 1 < token.operands.length) {
+                                                const skipValue = this.evaluateExpression(token.operands[i + 1]);
+                                                incbinSkip_p3 = skipValue < 0 ? incbinFullData_p3.length + skipValue : skipValue;
+                                                i++;
+                                            } else if (paramName === 'READ' && i + 1 < token.operands.length) {
+                                                const readValue = this.evaluateExpression(token.operands[i + 1]);
+                                                incbinRead_p3 = readValue < 0 ? incbinFullData_p3.length + readValue - incbinSkip_p3 : readValue;
+                                                i++;
+                                            } else if (paramName === 'FSIZE') {
+                                                i++; // Skip label name (already processed in Pass 2)
+                                            }
+                                        }
+                                    }
+
+                                    // Clamp to valid range
+                                    if (incbinSkip_p3 + incbinRead_p3 > incbinFullData_p3.length) {
+                                        incbinRead_p3 = incbinFullData_p3.length - incbinSkip_p3;
+                                    }
+
+                                    // Extract and include the specified byte range
+                                    const incbinSlice = incbinFullData_p3.slice(incbinSkip_p3, incbinSkip_p3 + incbinRead_p3);
+                                    this.output.push(...incbinSlice);
                                     break;
                                 case 'SECTION':
-                                    // Handle .section VIRTUAL / .section CODE
+                                    // Handle SECTION directive: CODE, DATA, BSS (v2.0.0)
                                     if (token.operands.length > 0) {
                                         const sectionName = token.operands[0].value.toUpperCase();
-                                        this.currentSection = sectionName; // 'VIRTUAL' or 'CODE'
+                                        const validSections = ['CODE', 'DATA', 'BSS'];
+
+                                        if (!validSections.includes(sectionName)) {
+                                            throw new Error(`SECTION directive at line ${this.currentLine}: Invalid section '${sectionName}'. Valid sections: CODE, DATA, BSS`);
+                                        }
+
+                                        this.currentSection = sectionName;
+                                    } else {
+                                        throw new Error(`SECTION directive at line ${this.currentLine}: Requires a section name (CODE, DATA, or BSS)`);
                                     }
                                     break;
                                 case 'ALIGN':
@@ -2398,6 +3713,36 @@
                                         this.output.push(0xFF);
                                     }
                                     this.pc += alignPadding_pass3;
+                                    break;
+                                case 'ASSERT':
+                                    // ASSERT directive: validate condition at compile time (Pass 3)
+                                    const assertCondition_p3 = this.evaluateExpression(token.operands[0]);
+                                    if (!assertCondition_p3) {
+                                        let assertMsg_p3 = 'Assertion failed';
+                                        if (token.operands.length > 1 && token.operands[1].type === 'string') {
+                                            assertMsg_p3 = token.operands[1].value;
+                                        }
+                                        throw new Error(`ASSERT failed at line ${this.currentLine}: ${assertMsg_p3}`);
+                                    }
+                                    // ASSERT passes - no output
+                                    break;
+                                case 'STRUCT':
+                                    // Structure instance in Pass 3: reserve space (output zeros)
+                                    if (token.operands.length > 0) {
+                                        const structType_p3 = token.operands[0].value;
+                                        const structDef_p3 = this.structTable[structType_p3];
+
+                                        if (structDef_p3) {
+                                            // Output zeros for structure size (labeled or unlabeled)
+                                            for (let i = 0; i < structDef_p3.size; i++) {
+                                                this.output.push(0x00);
+                                            }
+                                            this.pc += structDef_p3.size;
+                                        }
+                                    }
+                                    break;
+                                case 'ENDSTRUCT':
+                                    // Structure end - no output
                                     break;
                             }
                         } else if (token instanceof Instruction) {
@@ -2410,7 +3755,7 @@
                                 }).join(', ')} [Generated key: ${key}]`;
                                 throw new Error(errorMsg);
                             }
-                            
+
                             this.output.push(...opcode);
                             
                             // Handle operands
@@ -2481,7 +3826,15 @@
                                 }
                             }
                         }
-                        this.pc = this.output.length; 
+
+                        // Track line-to-address mapping for breakpoints
+                        const oldPC = this.pc;
+                        this.pc = this.output.length;
+
+                        // Only record if bytes were generated and we haven't seen this line before
+                        if (this.pc > oldPC && this.currentLine > 0 && !this.lineToAddressMap.has(this.currentLine)) {
+                            this.lineToAddressMap.set(this.currentLine, oldPC);
+                        }
                     } catch (error) {
                         // Add context to the error
                         const contextMsg = `Line ${this.currentLine}: ${token.mnemonic || 'directive'} ${(token.operands || []).map(o => o.value).join(', ')} - ${error.message}`;
@@ -2665,10 +4018,10 @@
                         if (this.currentPass < 3) return 0;
                         throw new Error(`Cannot evaluate expression for operand type: ${operand.type}`);
                     }
-                
+
                     let expr = String(operand.value);
                     const originalExpr = expr; // Keep original for error reporting
-                
+
                     // Handle temporary symbol references
                     expr = this.resolveTemporarySymbolReference(expr);
                 
@@ -2681,12 +4034,12 @@
                     // IMPORTANT: Parse hex/bin/oct numbers FIRST, before replacing $ with PC
                     // This allows $702b to be treated as hex, not $ (PC) followed by 702b
                     let parsedExpr = expr;
-                    parsedExpr = parsedExpr.replace(/0x([0-9a-fA-F]+)/gi, (match, hex) => parseInt(hex, 16));
-                    parsedExpr = parsedExpr.replace(/\$([0-9a-fA-F]+)/g, (match, hex) => parseInt(hex, 16));
-                    parsedExpr = parsedExpr.replace(/([0-9a-fA-F]+)h\b/gi, (match, hex) => parseInt(hex, 16));
-                    parsedExpr = parsedExpr.replace(/%([01]+)/g, (match, bin) => parseInt(bin, 2));
-                    parsedExpr = parsedExpr.replace(/([01]+)b\b/gi, (match, bin) => parseInt(bin, 2));
-                    parsedExpr = parsedExpr.replace(/@([0-7]+)/g, (match, oct) => parseInt(oct, 8));
+                    parsedExpr = parsedExpr.replace(/\b0x([0-9a-fA-F]+)/gi, (match, hex) => parseInt(hex, 16));
+                    parsedExpr = parsedExpr.replace(/\$([0-9a-fA-F]+)\b/g, (match, hex) => parseInt(hex, 16));
+                    parsedExpr = parsedExpr.replace(/\b([0-9a-fA-F]+)h\b/gi, (match, hex) => parseInt(hex, 16));
+                    parsedExpr = parsedExpr.replace(/\b%([01]+)\b/g, (match, bin) => parseInt(bin, 2));
+                    parsedExpr = parsedExpr.replace(/\b([01]+)b\b/gi, (match, bin) => parseInt(bin, 2));
+                    parsedExpr = parsedExpr.replace(/\b@([0-7]+)\b/g, (match, oct) => parseInt(oct, 8));
 
                     // NOW replace $ with PC (for expressions like $ or $+5 where $ is alone)
                     parsedExpr = parsedExpr.replace(/\$/g, this.pc);
@@ -2706,6 +4059,12 @@
                     const sortedSymbols = Object.keys(this.symbolTable).sort((a, b) => b.length - a.length);
 
                     for (const symbol of sortedSymbols) {
+                        // First try exact match (case-insensitive) - fastest and most reliable
+                        if (parsedExpr.toLowerCase() === symbol.toLowerCase()) {
+                            parsedExpr = this.symbolTable[symbol].toString();
+                            continue;
+                        }
+
                         // Escape special regex characters in symbol name
                         const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                         // For symbols starting with dot (local labels), don't use word boundary at start
@@ -2778,8 +4137,9 @@
 
                         // Allow arithmetic operators: + - * / ( )
                         // Allow bitwise operators: & | ^ ~ << >>
+                        // Allow comparison operators: == != < > <= >=
                         // Allow modulo: %
-                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.\&\|\^\~\<\>\%]/g, '');
+                        const sanitizedExpr = parsedExpr.replace(/[^\d\+\-\*\/\(\)\s\.\&\|\^\~\<\>\%\=\!]/g, '');
                         if (sanitizedExpr.trim() !== parsedExpr.trim()) {
                              if (this.currentPass < 3) return 0;
                              throw new Error(`Invalid characters in expression: ${originalExpr} (cleaned: ${sanitizedExpr})`);
@@ -2799,9 +4159,75 @@
                 }
             }
 
-            generateSymbolFile() {
-                // Generate OpenMSX-compatible symbol file (.sym)
-                let output = '';
+            generateSymbolFile(breakpointsSet = null, sourceLines = null) {
+                // Generate BlueMSX/openMSX-compatible symbol file (.sym)
+                // Format: label: equ 0xHEX
+                // Compatible with: BlueMSX, openMSX
+                // TESTED AND CONFIRMED WORKING with BlueMSX 2026-01-09
+
+                let output = '; Amy\'s ColecoVision Assembler - Symbol File\n';
+                output += `; Generated: ${new Date().toISOString()}\n`;
+                output += '; Format: openMSX/BlueMSX compatible with WLA-DX breakpoints\n';
+                output += ';\n';
+                output += '; Compatible with: BlueMSX, openMSX, Gearcoleco\n';
+                output += '; Usage: Load in debugger (Tools > Debugger > Load Symbols)\n\n';
+
+                // Add WLA-DX format [breakpoints] section for automatic loading (Gearcoleco)
+                // Also add comments for manual reference
+                if (breakpointsSet && breakpointsSet.size > 0) {
+                    const breakpointAddresses = [];
+                    const sortedBreakpoints = Array.from(breakpointsSet).sort((a, b) => a - b);
+
+                    // First, add comment section for reference
+                    output += '; === Breakpoints ===\n';
+                    for (const lineNum of sortedBreakpoints) {
+                        // Breakpoint line numbers are 0-based from CodeMirror, but lineToAddressMap uses 1-based
+                        const lineNum1Based = lineNum + 1;
+                        let address = this.lineToAddressMap.get(lineNum1Based);
+                        let labelInfo = '';
+                        let resolvedFrom = '';
+
+                        // If no direct address mapping, try to resolve from label on this line
+                        if (address === undefined && sourceLines && sourceLines[lineNum]) {
+                            const line = sourceLines[lineNum].trim();
+                            const labelMatch = line.match(/^(\w+):/);
+                            if (labelMatch) {
+                                const label = labelMatch[1];
+                                const labelAddr = this.symbolTable[label];
+                                if (labelAddr !== undefined) {
+                                    address = labelAddr;
+                                    labelInfo = ` (${label})`;
+                                    resolvedFrom = ' [resolved from label]';
+                                }
+                            }
+                        } else if (address !== undefined && sourceLines && sourceLines[lineNum]) {
+                            // Already have address, just get label for display
+                            const line = sourceLines[lineNum].trim();
+                            const labelMatch = line.match(/^(\w+):/);
+                            if (labelMatch) {
+                                labelInfo = ` (${labelMatch[1]})`;
+                            }
+                        }
+
+                        if (address !== undefined) {
+                            breakpointAddresses.push(address);
+                            output += `; Line ${lineNum + 1} -> 0x${address.toString(16).toUpperCase()}${labelInfo}${resolvedFrom}\n`;
+                        } else {
+                            output += `; Line ${lineNum + 1} -> (no code at this line - breakpoint ignored)\n`;
+                        }
+                    }
+                    output += '\n';
+
+                    // Add WLA-DX [breakpoints] section for automatic loading
+                    if (breakpointAddresses.length > 0) {
+                        output += '[breakpoints]\n';
+                        for (const address of breakpointAddresses) {
+                            // WLA-DX format: bank:address (00:XXXX for ColecoVision - single bank)
+                            output += `00:${address.toString(16).toUpperCase().padStart(4, '0')}\n`;
+                        }
+                        output += '\n';
+                    }
+                }
 
                 // Combine symbolTable and constantTable for complete symbol list
                 const allSymbols = {};
@@ -2816,26 +4242,811 @@
                     allSymbols[name] = value;
                 }
 
-                // Filter out internal/temporary symbols and sort by name
-                const sortedSymbols = Object.entries(allSymbols)
-                    .filter(([name]) => {
-                        // Skip internal symbols starting with underscore
-                        if (name.startsWith('_')) return false;
-                        // Skip macro-generated internal symbols
-                        if (name.includes('@@')) return false;
-                        // Skip temporary labels (starting with digit or special chars)
-                        if (/^[\d$@]/.test(name)) return false;
-                        return true;
-                    })
-                    .sort((a, b) => a[0].localeCompare(b[0]));
+                // Filter and collect all symbols
+                const symbols = [];
 
-                // Generate symbol file in OpenMSX format: LABEL: equ HEXh
-                for (const [name, value] of sortedSymbols) {
-                    const hexAddr = value.toString(16).toUpperCase().padStart(4, '0');
-                    output += `${name}: equ ${hexAddr}h\n`;
+                for (const [name, value] of Object.entries(allSymbols)) {
+                    // Skip internal symbols starting with underscore
+                    if (name.startsWith('_')) continue;
+                    // Skip macro-generated internal symbols
+                    if (name.includes('@@')) continue;
+                    // Skip temporary labels (starting with digit or special chars)
+                    if (/^[\d$@]/.test(name)) continue;
+
+                    symbols.push([name, value]);
+                }
+
+                // Sort alphabetically (case-insensitive)
+                symbols.sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+
+                // Generate symbols in openMSX format: label: equ 0xHEX
+                for (const [name, value] of symbols) {
+                    // Convert to lowercase for better compatibility
+                    const labelName = name.toLowerCase();
+                    // Format as hexadecimal with 0x prefix (no zero-padding needed)
+                    const hexValue = '0x' + value.toString(16).toLowerCase();
+                    output += `${labelName}: equ ${hexValue}\n`;
                 }
 
                 return output;
+            }
+        }
+
+        // --- Z80 Code Optimizer ---
+        class Z80Optimizer {
+            constructor(assembler, config = {}) {
+                this.assembler = assembler;
+                this.symbolTable = assembler.symbolTable;
+                this.config = config; // Optimizer configuration
+                this.stats = {
+                    jpToJr: 0,
+                    ldToXor: 0,
+                    deadCodeRemoved: 0,
+                    peepholeOpts: 0,
+                    callMerge: 0,
+                    rstOptimized: 0,
+                    rstVectorsUsed: 0,
+                    bytesSaved: 0
+                };
+                this.rstMappings = {}; // Track which routines are mapped to which RST vectors
+            }
+
+            // Phase 1: Optimizations that don't depend on accurate final addresses
+            optimizePhase1(tokens) {
+                let optimized = tokens;
+
+                // Dead code elimination (configurable)
+                if (this.config.deadCode) {
+                    optimized = this.eliminateDeadCode(optimized);
+                }
+
+                // RST vector optimization (configurable)
+                if (this.config.rstVectors) {
+                    optimized = this.optimizeRstVectors(optimized);
+                }
+
+                // Peephole optimizations
+                if (this.config.peephole) {
+                    optimized = this.peepholeOptimize(optimized);
+                }
+
+                return optimized;
+            }
+
+            // Phase 2: Address-dependent optimizations (requires accurate symbol table)
+            optimizePhase2(tokens) {
+                let optimized = tokens;
+
+                // Instruction optimizations (JP→JR, LD A,0→XOR A)
+                // These need accurate addresses from symbol table
+                // NOTE: JP→JR is disabled if dead code elimination was used, because
+                // dead code elimination changes addresses significantly and JP→JR
+                // optimizations during this pass would use stale addresses
+                optimized = this.optimizeInstructions(optimized);
+
+                return optimized;
+            }
+
+            eliminateDeadCode(tokens) {
+                const reachable = new Set();
+                const labels = new Map(); // label → index
+                let startLabelIdx = -1;
+
+                // Find all labels and locate "Start" label (ColecoVision entry point)
+                tokens.forEach((token, idx) => {
+                    if (token.label) {
+                        labels.set(token.label, idx);
+                        if (token.label.toLowerCase() === 'start') {
+                            startLabelIdx = idx;
+                        }
+                    }
+                });
+
+                // Preserve ColecoVision header (everything before Start label)
+                // This includes RST vectors, NMI handler, cartridge header, etc.
+                if (startLabelIdx !== -1) {
+                    for (let i = 0; i < startLabelIdx; i++) {
+                        reachable.add(i);
+                    }
+                }
+
+                // Find all labels referenced in DW/DEFW directives (jump tables, data pointers)
+                // These are conservatively marked as reachable since they're used indirectly
+                const dwReferencedLabels = new Set();
+                tokens.forEach(token => {
+                    if (token instanceof Directive &&
+                        (token.name === 'DW' || token.name === 'DEFW')) {
+                        for (const operand of token.operands) {
+                            if (operand.type === 'symbol') {
+                                dwReferencedLabels.add(operand.value);
+                            }
+                        }
+                    }
+                });
+
+                // Mark reachable code starting from Start label
+                const entryPoint = startLabelIdx !== -1 ? startLabelIdx : 0;
+                this.markReachableFrom(entryPoint, tokens, reachable, labels);
+
+                // Mark all DW-referenced labels as reachable (jump tables, etc.)
+                for (const labelName of dwReferencedLabels) {
+                    if (labels.has(labelName)) {
+                        this.markReachableFrom(labels.get(labelName), tokens, reachable, labels);
+                    }
+                }
+
+                if (dwReferencedLabels.size > 0) {
+                    log(`  Preserved ${dwReferencedLabels.size} label(s) from DW directives (jump tables)`, 'debug');
+                }
+
+                // Remove unreachable code (only after Start label)
+                const optimized = [];
+                let removedCount = 0;
+                let bytesSaved = 0;
+
+                tokens.forEach((token, idx) => {
+                    if (reachable.has(idx)) {
+                        optimized.push(token);
+                    } else if (token instanceof Directive) {
+                        // Always keep directives (DB, DW, ORG, etc.)
+                        optimized.push(token);
+                    } else if (token instanceof Instruction) {
+                        // Count actual instruction bytes removed
+                        const key = this.assembler.getOpcodeKey(token);
+                        const opcode = Z80_OPCODES[key];
+                        let instrSize = 1; // Default
+
+                        if (opcode) {
+                            instrSize = opcode.length;
+                            if (key.includes('imm8') || key.includes('rel8') || key.includes('offset')) instrSize++;
+                            if (key.includes('imm16')) instrSize += 2;
+                        }
+
+                        bytesSaved += instrSize;
+                        removedCount++;
+                    }
+                    // Don't keep unreachable labels - they'll be orphaned
+                });
+
+                this.stats.deadCodeRemoved = removedCount;
+                this.stats.bytesSaved += bytesSaved;
+
+                if (removedCount > 0) {
+                    log(`  Dead code elimination: removed ${removedCount} instruction(s), saved ${bytesSaved} bytes`, 'info');
+                }
+
+                return optimized;
+            }
+
+            markReachableFrom(startIdx, tokens, reachable, labels) {
+                if (startIdx >= tokens.length) return;
+                if (reachable.has(startIdx)) return; // Already visited
+
+                for (let i = startIdx; i < tokens.length; i++) {
+                    if (reachable.has(i)) break; // Already explored this path
+                    const token = tokens[i];
+
+                    reachable.add(i);
+
+                    if (token instanceof Instruction) {
+                        const mnem = token.mnemonic.toLowerCase();
+
+                        // Track jumps and calls
+                        if (['jp', 'jr'].includes(mnem)) {
+                            const lastOp = token.operands[token.operands.length - 1];
+                            if (lastOp.type === 'symbol' && labels.has(lastOp.value)) {
+                                // Recursively mark jump target
+                                this.markReachableFrom(labels.get(lastOp.value), tokens, reachable, labels);
+                            }
+
+                            // Unconditional jump ends current flow
+                            if (token.operands.length === 1) {
+                                break;
+                            }
+                        } else if (mnem === 'call') {
+                            // CALL doesn't end flow - it returns!
+                            const lastOp = token.operands[token.operands.length - 1];
+                            if (lastOp.type === 'symbol' && labels.has(lastOp.value)) {
+                                // Recursively mark call target
+                                this.markReachableFrom(labels.get(lastOp.value), tokens, reachable, labels);
+                            }
+                            // Continue to next instruction after CALL
+                        } else if (['ret', 'reti', 'retn'].includes(mnem)) {
+                            // Return ends current flow
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            // NEW: Simple RST optimization - just replace CALL with RST, header patching is post-compilation
+            optimizeRstVectors(tokens) {
+                // Step 1: Scan for CALL instructions to BIOS addresses ($0000-$1FFF)
+                const callFrequency = new Map(); // address → count
+
+                for (const token of tokens) {
+                    if (token instanceof Instruction && token.mnemonic.toLowerCase() === 'call') {
+                        const target = token.operands[0];
+                        if (target.type === 'immediate' && target.value >= 0x0000 && target.value <= 0x1FFF) {
+                            const addr = target.value;
+                            callFrequency.set(addr, (callFrequency.get(addr) || 0) + 1);
+                        }
+                    }
+                }
+
+                // Step 2: Find top 3 most-called BIOS routines (we have 6 RST slots but reserve $38)
+                const topCalls = Array.from(callFrequency.entries())
+                    .filter(([addr, count]) => count >= 2) // Need at least 2 calls to be worth it
+                    .sort((a, b) => b[1] - a[1]) // Sort by frequency (highest first)
+                    .slice(0, 3); // Take top 3
+
+                if (topCalls.length === 0) {
+                    log('  RST optimization skipped: No frequently-called BIOS routines found', 'debug');
+                    return tokens;
+                }
+
+                // Step 3: Assign RST vectors to top routines
+                const rstVectors = [0x08, 0x10, 0x18]; // Use first 3 available vectors
+                const rstMap = new Map(); // BIOS address → RST code
+
+                topCalls.forEach(([addr, count], idx) => {
+                    rstMap.set(addr, rstVectors[idx]);
+                    log(`  RST $${rstVectors[idx].toString(16).toUpperCase()}: CALL $${addr.toString(16).toUpperCase()} (${count} uses, saves ${count * 2} bytes)`, 'info');
+                });
+
+                // Store RST mapping for post-compilation header patching
+                this.rstMapping = rstMap; // Will be used by patchRomHeader()
+
+                // Step 4: Replace CALL with RST in token array
+                const optimized = [];
+                let replacedCount = 0;
+
+                for (const token of tokens) {
+                    if (token instanceof Instruction && token.mnemonic.toLowerCase() === 'call') {
+                        const target = token.operands[0];
+                        if (target.type === 'immediate' && rstMap.has(target.value)) {
+                            // Replace CALL with RST
+                            const rstCode = rstMap.get(target.value);
+                            const rstInstr = new Instruction(
+                                token.label,
+                                'rst',
+                                [new Operand('immediate', rstCode)],
+                                token.lineNumber
+                            );
+                            optimized.push(rstInstr);
+                            replacedCount++;
+                            this.stats.rstOptimized++;
+                            this.stats.bytesSaved += 2; // CALL (3 bytes) → RST (1 byte)
+                        } else {
+                            optimized.push(token);
+                        }
+                    } else {
+                        optimized.push(token);
+                    }
+                }
+
+                log(`  RST optimization: ${rstMap.size} vector(s) assigned, ${replacedCount} CALL(s) replaced with RST`, 'success');
+                this.stats.rstVectorsUsed = rstMap.size;
+                return optimized;
+            }
+
+            optimizeInstructions(tokens) {
+                const optimized = [];
+                let pc = this.assembler.firstOrg || 0;
+
+                // Build a NEW symbol table as we optimize - this is critical!
+                // We need to track where labels end up AFTER each optimization
+                const newSymbolTable = {};
+
+                for (const token of tokens) {
+                    // Update label positions in our new symbol table
+                    if (token.label) {
+                        newSymbolTable[token.label] = pc;
+                    }
+
+                    if (token instanceof Instruction) {
+                        const mnem = token.mnemonic.toLowerCase();
+
+                        // JP → JR optimization (configurable)
+                        // Skip if dead code elimination was used (addresses are unstable)
+                        if (this.config.jpToJr && !this.config.deadCode && mnem === 'jp' && token.operands.length > 0) {
+                            const lastOp = token.operands[token.operands.length - 1];
+
+                            // Only optimize direct jumps (not JP (HL), JP (IX), etc.)
+                            if (lastOp.type === 'symbol' || lastOp.type === 'immediate') {
+                                // Check if this is a conditional jump we can convert
+                                // JR only supports: Z, NZ, C, NC (NOT: PE, PO, P, M)
+                                let canConvert = true;
+                                if (token.operands.length === 2) {
+                                    // Conditional jump - check if condition is supported by JR
+                                    const condition = token.operands[0].value.toLowerCase();
+                                    const validConditions = ['z', 'nz', 'c', 'nc'];
+                                    if (!validConditions.includes(condition)) {
+                                        canConvert = false;
+                                    }
+                                }
+
+                                if (canConvert) {
+                                    // CRITICAL: Never optimize JP in ColecoVision ROM header + NMI region ($8000-$8023)
+                                    // Header ($8000-$8020): Fixed 3-byte RST vector slots
+                                    // NMI ($8021-$8023): 3-byte NMI handler (must stay 3 bytes)
+                                    // Title ($8024+): Cartridge title - converting JP→JR here would shift title data
+                                    if (pc >= 0x8000 && pc <= 0x8023) {
+                                        // Skip optimization in header + NMI region
+                                    } else {
+                                        // Use NEW symbol table if target has been processed, otherwise use old
+                                        const targetAddr = lastOp.type === 'symbol' && newSymbolTable[lastOp.value] !== undefined
+                                            ? newSymbolTable[lastOp.value]
+                                            : this.resolveAddress(lastOp);
+
+                                        // Use size 2 (JR size) for range check
+                                        if (this.canUseRelativeJump(pc, targetAddr, 2)) {
+                                            // Convert JP to JR
+                                            const jrToken = new Instruction(
+                                                token.label,
+                                                'jr',
+                                                token.operands,
+                                                token.lineNumber
+                                            );
+                                            optimized.push(jrToken);
+                                            this.stats.jpToJr++;
+                                            this.stats.bytesSaved++;
+                                            pc += 2; // JR is 2 bytes (saves 1 byte)
+                                            continue;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // LD A,0 → XOR A optimization (configurable)
+                        if (this.config.ldToXor &&
+                            mnem === 'ld' &&
+                            token.operands.length === 2 &&
+                            token.operands[0].type === 'register' &&
+                            token.operands[0].value.toLowerCase() === 'a' &&
+                            token.operands[1].type === 'immediate' &&
+                            token.operands[1].value === 0) {
+
+                            const xorToken = new Instruction(
+                                token.label,
+                                'xor',
+                                [new Operand('register', 'a')],
+                                token.lineNumber
+                            );
+                            optimized.push(xorToken);
+                            this.stats.ldToXor++;
+                            this.stats.bytesSaved++;
+                            log(`  Optimized LD A,0 to XOR A at line ${token.lineNumber}`, 'debug');
+                            pc += 1; // XOR A is 1 byte
+                            continue;
+                        }
+
+                        // Calculate PC for next instruction
+                        const key = this.assembler.getOpcodeKey(token);
+                        const opcode = Z80_OPCODES[key];
+                        if (opcode) {
+                            let size = opcode.length;
+                            if (key.includes('imm8') || key.includes('rel8') || key.includes('offset')) size++;
+                            if (key.includes('imm16')) size += 2;
+                            pc += size;
+                        } else {
+                            pc += 1; // Fallback
+                        }
+                    } else if (token instanceof Directive) {
+                        // Update PC for directives
+                        if (token.name === 'ORG') {
+                            pc = token.operands[0].value;
+                        } else if (token.name === 'DB' || token.name === 'DEFB') {
+                            pc += token.operands.length;
+                        } else if (token.name === 'DW' || token.name === 'DEFW') {
+                            pc += token.operands.length * 2;
+                        } else if (token.name === 'DS' || token.name === 'DEFS') {
+                            pc += token.operands[0].value;
+                        }
+                    }
+
+                    optimized.push(token);
+                }
+
+                // Update the optimizer's symbol table with the new addresses
+                // This ensures subsequent iterations use correct addresses
+                this.symbolTable = newSymbolTable;
+
+                return optimized;
+            }
+
+            canUseRelativeJump(currentPC, targetAddr, instrSize) {
+                // JR offset is relative to PC AFTER the instruction
+                // JR uses signed 8-bit offset: -126 to +129 bytes
+                // No safety margin needed - iterative optimization converges to stable addresses
+                const pcAfter = currentPC + instrSize;
+                const offset = targetAddr - pcAfter;
+                return offset >= -126 && offset <= 129;
+            }
+
+            resolveAddress(operand) {
+                if (operand.type === 'immediate') {
+                    return operand.value;
+                } else if (operand.type === 'symbol') {
+                    return this.symbolTable[operand.value] || 0;
+                }
+                return 0;
+            }
+
+            mergeCalledRoutines(tokens) {
+                // Find patterns where a CALL is immediately followed by RET
+                // and the called routine is only called from this one location
+                // We can inline the routine and eliminate the CALL/RET overhead
+
+                // Step 1: Analyze all CALL instructions and their targets
+                const callMap = new Map(); // target label → array of call indices
+                const labels = new Map(); // label → token index
+
+                tokens.forEach((token, idx) => {
+                    if (token.label) {
+                        labels.set(token.label, idx);
+                    }
+                    if (token instanceof Instruction && token.mnemonic.toLowerCase() === 'call') {
+                        const target = token.operands[0];
+                        if (target.type === 'symbol' || target.type === 'label') {
+                            if (!callMap.has(target.value)) {
+                                callMap.set(target.value, []);
+                            }
+                            callMap.set(target.value, [...callMap.get(target.value), idx]);
+                        }
+                    }
+                });
+
+                // Step 2: Find routines that are only called once
+                const optimized = [];
+                const inlinedRoutines = new Set();
+
+                for (let i = 0; i < tokens.length; i++) {
+                    const token = tokens[i];
+
+                    // Check if this is a CALL instruction
+                    if (token instanceof Instruction && token.mnemonic.toLowerCase() === 'call') {
+                        const target = token.operands[0];
+                        if (target.type === 'symbol' || target.type === 'label') {
+                            const targetLabel = target.value;
+                            const callCount = callMap.get(targetLabel) || [];
+
+                            // Only optimize if called exactly once
+                            if (callCount.length === 1 && labels.has(targetLabel)) {
+                                const routineStartIdx = labels.get(targetLabel);
+
+                                // Extract routine instructions until RET
+                                const routineInstructions = [];
+                                let routineEndIdx = routineStartIdx;
+                                let foundRet = false;
+
+                                for (let j = routineStartIdx; j < tokens.length; j++) {
+                                    const routineToken = tokens[j];
+
+                                    // Skip the label itself
+                                    if (j === routineStartIdx && routineToken.label) {
+                                        continue;
+                                    }
+
+                                    // Stop at next label (new routine)
+                                    if (j > routineStartIdx && routineToken.label) {
+                                        break;
+                                    }
+
+                                    if (routineToken instanceof Instruction) {
+                                        const mnem = routineToken.mnemonic.toLowerCase();
+
+                                        if (mnem === 'ret' || mnem === 'reti' || mnem === 'retn') {
+                                            foundRet = true;
+                                            routineEndIdx = j;
+                                            break;
+                                        }
+
+                                        routineInstructions.push(routineToken);
+                                    }
+                                }
+
+                                // Inline if we found a simple routine with RET
+                                if (foundRet && routineInstructions.length > 0 && routineInstructions.length <= 10) {
+                                    // Check that routine doesn't contain jumps/calls to itself (recursive)
+                                    const hasRecursion = routineInstructions.some(instr => {
+                                        if (['call', 'jp', 'jr'].includes(instr.mnemonic.toLowerCase())) {
+                                            const op = instr.operands[instr.operands.length - 1];
+                                            return op.value === targetLabel;
+                                        }
+                                        return false;
+                                    });
+
+                                    if (!hasRecursion) {
+                                        // Inline the routine instructions
+                                        log(`  Inlining routine '${targetLabel}' (${routineInstructions.length} instructions)`, 'debug');
+
+                                        for (const instr of routineInstructions) {
+                                            optimized.push(new Instruction(null, instr.mnemonic, instr.operands, instr.lineNumber));
+                                        }
+
+                                        inlinedRoutines.add(targetLabel);
+                                        this.stats.callMerge++;
+                                        // Save 3 bytes for CALL + 1 byte for RET
+                                        this.stats.bytesSaved += 4;
+                                        continue; // Skip the original CALL
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Keep token if not a routine that was inlined
+                    if (token.label && inlinedRoutines.has(token.label)) {
+                        // Skip the routine label and its instructions
+                        let j = i + 1;
+                        while (j < tokens.length) {
+                            const nextToken = tokens[j];
+                            if (nextToken.label) break; // Next routine
+                            if (nextToken instanceof Instruction) {
+                                const mnem = nextToken.mnemonic.toLowerCase();
+                                if (mnem === 'ret' || mnem === 'reti' || mnem === 'retn') {
+                                    i = j; // Skip to after RET
+                                    break;
+                                }
+                            }
+                            j++;
+                        }
+                    } else {
+                        optimized.push(token);
+                    }
+                }
+
+                return optimized;
+            }
+
+            peepholeOptimize(tokens) {
+                const optimized = [];
+
+                for (let i = 0; i < tokens.length; i++) {
+                    const token = tokens[i];
+
+                    if (!(token instanceof Instruction)) {
+                        optimized.push(token);
+                        continue;
+                    }
+
+                    const mnem = token.mnemonic.toLowerCase();
+
+                    // ========================================
+                    // Phase 1.1: Arithmetic No-Ops
+                    // ========================================
+
+                    // Pattern: ADD A,0 / ADC A,0 / SUB 0 / SBC A,0 / OR 0 / XOR 0
+                    if (['add', 'adc', 'sub', 'sbc', 'or', 'xor'].includes(mnem) &&
+                        token.operands.length >= 1) {
+
+                        const lastOp = token.operands[token.operands.length - 1];
+                        if (lastOp.type === 'immediate' && lastOp.value === 0) {
+                            this.stats.peepholeOpts++;
+                            this.stats.bytesSaved += 2; // Most arithmetic with immediate are 2 bytes
+                            log(`  Removed no-op ${mnem.toUpperCase()} ${token.operands.map(o => o.value).join(',')} at line ${token.lineNumber}`, 'debug');
+                            continue; // Skip this instruction
+                        }
+                    }
+
+                    // Pattern: AND 0xFF (no-op for 8-bit register)
+                    if (mnem === 'and' && token.operands.length >= 1) {
+                        const lastOp = token.operands[token.operands.length - 1];
+                        if (lastOp.type === 'immediate' && lastOp.value === 0xFF) {
+                            this.stats.peepholeOpts++;
+                            this.stats.bytesSaved += 2;
+                            log(`  Removed no-op AND 0xFF at line ${token.lineNumber}`, 'debug');
+                            continue;
+                        }
+                    }
+
+                    // ========================================
+                    // Phase 1.2: Redundant Loads
+                    // ========================================
+
+                    // Pattern: LD r,n followed by LD r,m (first is redundant)
+                    if (mnem === 'ld' && i + 1 < tokens.length && token.operands.length === 2) {
+                        const next = tokens[i + 1];
+                        if (next instanceof Instruction &&
+                            next.mnemonic.toLowerCase() === 'ld' &&
+                            next.operands.length === 2) {
+
+                            // Same destination register?
+                            const dest1 = token.operands[0];
+                            const dest2 = next.operands[0];
+
+                            if (dest1.type === 'register' && dest2.type === 'register' &&
+                                dest1.value.toLowerCase() === dest2.value.toLowerCase()) {
+
+                                // Both are immediate loads?
+                                if (token.operands[1].type === 'immediate' &&
+                                    next.operands[1].type === 'immediate') {
+                                    this.stats.peepholeOpts++;
+                                    this.stats.bytesSaved += 2;
+                                    log(`  Removed redundant LD ${dest1.value},${token.operands[1].value} (overwritten) at line ${token.lineNumber}`, 'debug');
+                                    continue; // Skip first LD
+                                }
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // Phase 1.3: INC/DEC Cancellation
+                    // ========================================
+
+                    // Pattern: INC r followed by DEC r (or vice versa)
+                    if (['inc', 'dec'].includes(mnem) && i + 1 < tokens.length && token.operands.length === 1) {
+                        const next = tokens[i + 1];
+                        if (next instanceof Instruction && next.operands.length === 1) {
+                            const nextMnem = next.mnemonic.toLowerCase();
+                            const opposite = mnem === 'inc' ? 'dec' : 'inc';
+
+                            if (nextMnem === opposite) {
+                                const op1 = token.operands[0];
+                                const op2 = next.operands[0];
+
+                                if (op1.type === op2.type && op1.value === op2.value) {
+                                    // Remove both
+                                    i++; // Skip next
+                                    this.stats.peepholeOpts++;
+                                    this.stats.bytesSaved += 2; // 1 byte each
+                                    log(`  Removed ${mnem.toUpperCase()}/${opposite.toUpperCase()} pair at line ${token.lineNumber}`, 'debug');
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // Phase 1.4: CP 0 → OR A
+                    // ========================================
+
+                    // Pattern: CP 0 → OR A (shorter, same flags)
+                    if (mnem === 'cp' && token.operands.length === 1) {
+                        const operand = token.operands[0];
+                        if (operand.type === 'immediate' && operand.value === 0) {
+                            // Replace with OR A
+                            const orToken = new Instruction(
+                                token.label,
+                                'or',
+                                [new Operand('register', 'a')],
+                                token.lineNumber
+                            );
+                            optimized.push(orToken);
+                            this.stats.peepholeOpts++;
+                            this.stats.bytesSaved++; // CP 0 is 2 bytes, OR A is 1 byte
+                            log(`  Replaced CP 0 with OR A at line ${token.lineNumber}`, 'debug');
+                            continue;
+                        }
+                    }
+
+                    // ========================================
+                    // Phase 1.5: PUSH/POP Cancellation
+                    // ========================================
+
+                    // Pattern: PUSH r followed by POP r (both are no-ops)
+                    if (mnem === 'push' && i + 1 < tokens.length && token.operands.length === 1) {
+                        const next = tokens[i + 1];
+                        if (next instanceof Instruction &&
+                            next.mnemonic.toLowerCase() === 'pop' &&
+                            next.operands.length === 1) {
+
+                            const op1 = token.operands[0];
+                            const op2 = next.operands[0];
+
+                            if (op1.value === op2.value) {
+                                // Skip both instructions
+                                i++; // Skip POP
+                                this.stats.peepholeOpts++;
+                                this.stats.bytesSaved += 2; // 1 byte each
+                                log(`  Removed PUSH/POP ${op1.value} pair at line ${token.lineNumber}`, 'debug');
+                                continue;
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // Original Patterns (from before)
+                    // ========================================
+
+                    // Pattern: LD reg,reg (no-op when same register)
+                    if (mnem === 'ld' &&
+                        token.operands.length === 2 &&
+                        token.operands[0].type === 'register' &&
+                        token.operands[1].type === 'register' &&
+                        token.operands[0].value.toLowerCase() === token.operands[1].value.toLowerCase()) {
+
+                        this.stats.peepholeOpts++;
+                        this.stats.bytesSaved++;
+                        log(`  Removed no-op LD ${token.operands[0].value},${token.operands[1].value} at line ${token.lineNumber}`, 'debug');
+                        continue; // Skip this instruction
+                    }
+
+                    // Pattern: LD A,B followed by LD B,A (identity swap)
+                    if (i + 1 < tokens.length && mnem === 'ld') {
+                        const next = tokens[i + 1];
+                        if (next instanceof Instruction &&
+                            next.mnemonic.toLowerCase() === 'ld' &&
+                            next.operands.length === 2 &&
+                            token.operands[0].type === 'register' &&
+                            token.operands[1].type === 'register' &&
+                            next.operands[0].type === 'register' &&
+                            next.operands[1].type === 'register' &&
+                            token.operands[0].value.toLowerCase() === next.operands[1].value.toLowerCase() &&
+                            token.operands[1].value.toLowerCase() === next.operands[0].value.toLowerCase()) {
+
+                            optimized.push(token); // Keep first
+                            i++; // Skip second
+                            this.stats.peepholeOpts++;
+                            this.stats.bytesSaved++;
+                            log(`  Removed identity swap at line ${token.lineNumber}`, 'debug');
+                            continue;
+                        }
+                    }
+
+                    // ========================================
+                    // Priority 1: Value Reuse
+                    // ========================================
+
+                    // Pattern: LD A,n followed by LD r,n → LD A,n; LD r,A (if r != A)
+                    // Only optimize for 8-bit registers and immediate values
+                    if (mnem === 'ld' && i + 1 < tokens.length && token.operands.length === 2) {
+                        const dest1 = token.operands[0];
+                        const src1 = token.operands[1];
+
+                        // First instruction loads immediate into register
+                        if (dest1.type === 'register' && src1.type === 'immediate') {
+                            const next = tokens[i + 1];
+
+                            if (next instanceof Instruction &&
+                                next.mnemonic.toLowerCase() === 'ld' &&
+                                next.operands.length === 2) {
+
+                                const dest2 = next.operands[0];
+                                const src2 = next.operands[1];
+
+                                // Second instruction loads SAME immediate into different register
+                                if (dest2.type === 'register' &&
+                                    src2.type === 'immediate' &&
+                                    src1.value === src2.value &&
+                                    dest1.value.toLowerCase() !== dest2.value.toLowerCase()) {
+
+                                    // Check that both are 8-bit registers (not 16-bit pairs)
+                                    const is8bit = (reg) => {
+                                        const r = reg.toLowerCase();
+                                        return ['a', 'b', 'c', 'd', 'e', 'h', 'l', 'ixh', 'ixl', 'iyh', 'iyl'].includes(r);
+                                    };
+
+                                    if (is8bit(dest1.value) && is8bit(dest2.value)) {
+                                        // Replace: LD r2,n → LD r2,r1
+                                        optimized.push(token); // Keep first LD
+
+                                        const newNext = new Instruction(
+                                            next.label,
+                                            'ld',
+                                            [dest2, new Operand('register', dest1.value)],
+                                            next.lineNumber
+                                        );
+                                        optimized.push(newNext);
+
+                                        i++; // Skip original next
+                                        this.stats.peepholeOpts++;
+                                        this.stats.bytesSaved++; // LD r,n (2 bytes) → LD r,r (1 byte)
+                                        log(`  Value reuse: LD ${dest2.value},${src2.value} → LD ${dest2.value},${dest1.value} at line ${next.lineNumber}`, 'debug');
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    optimized.push(token);
+                }
+
+                return optimized;
             }
         }
 
@@ -2919,10 +5130,11 @@
                 syncMobileMenuItems();
 
                 // Generate .SYM file (OpenMSX debugger symbols)
-                const symContent = assembler.generateSymbolFile();
+                const sourceLines = editor.getValue().split('\n');
+                const symContent = assembler.generateSymbolFile(breakpoints, sourceLines);
                 const symFilename = `${sourceBaseName}.sym`;
                 projectFiles[symFilename] = new TextEncoder().encode(symContent);
-                log(`Generated symbol file: ${symFilename}`, 'success');
+                log(`Generated symbol file: ${symFilename}` + (breakpoints.size > 0 ? ` with ${breakpoints.size} breakpoint(s)` : ''), 'success');
                 renderFileTree(); // Refresh file tree to show the new .SYM file
 
                 // Validate header again at the end to ensure test buttons are correctly shown/hidden
@@ -3070,6 +5282,8 @@
 
         downloadBtn.addEventListener('click', () => {
             if (!compiledBinary) return;
+
+            // Download the binary file
             const blob = new Blob([compiledBinary], { type: 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -3079,7 +5293,27 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            log(`Downloaded ${outputFilename}.`);
+
+            let message = `Downloaded ${outputFilename}`;
+
+            // Also download the .sym file if we have symbols
+            if (assemblerInstance && Object.keys(assemblerInstance.symbolTable).length > 0) {
+                const sourceLines = editor.getValue().split('\n');
+                const symContent = assemblerInstance.generateSymbolFile(breakpoints, sourceLines);
+                const symBlob = new Blob([symContent], { type: 'text/plain' });
+                const symUrl = URL.createObjectURL(symBlob);
+                const symLink = document.createElement('a');
+                symLink.href = symUrl;
+                symLink.download = outputFilename.replace(/\.[^/.]+$/, '') + '.sym';
+                document.body.appendChild(symLink);
+                symLink.click();
+                document.body.removeChild(symLink);
+                URL.revokeObjectURL(symUrl);
+
+                message += ` and ${outputFilename.replace(/\.[^/.]+$/, '') + '.sym'}`;
+            }
+
+            log(message + '.', 'success');
         });
 
         exportSymbolsBtn.addEventListener('click', () => {
