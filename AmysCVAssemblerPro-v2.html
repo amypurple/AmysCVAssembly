@@ -79,6 +79,10 @@
             text-align: center;
             display: block;
         }
+        .magic-number-highlight {
+            background-color: rgba(234, 179, 8, 0.3);
+            border-bottom: 2px solid #eab308;
+        }
 
         #drop-zone {
             border: 2px dashed #475569;
@@ -452,7 +456,7 @@
                 <button id="optimizer-config-close" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
             <div class="space-y-3 text-sm">
-                <div class="text-gray-400 text-xs mb-2">Settings apply to both auto-optimizer and assistant.</div>
+                <div class="text-gray-400 text-xs mb-2">Settings apply to both "Optimize on Build" and assistant suggestions.</div>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-peephole" class="mt-1 mr-3" checked>
                     <div>
@@ -463,21 +467,21 @@
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-dead-code" class="mt-1 mr-3">
                     <div>
-                        <div class="text-gray-200 font-semibold">Dead code elimination <span class="text-orange-400">(auto-optimizer only)</span></div>
+                        <div class="text-gray-200 font-semibold">Dead code elimination <span class="text-orange-400">(build only)</span></div>
                         <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> May remove intentional unreachable code or break ROM structure.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-rst-vectors" class="mt-1 mr-3">
                     <div>
-                        <div class="text-gray-200 font-semibold">RST vector optimization <span class="text-orange-400">(auto-optimizer only)</span></div>
+                        <div class="text-gray-200 font-semibold">RST vector optimization <span class="text-orange-400">(build only)</span></div>
                         <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Converts CALL to RST. May conflict with ROM header.</div>
                     </div>
                 </label>
                 <label class="flex items-start cursor-pointer">
                     <input type="checkbox" id="opt-inline-routines" class="mt-1 mr-3">
                     <div>
-                        <div class="text-gray-200 font-semibold">Inline single-call routines <span class="text-orange-400">(auto-optimizer only)</span></div>
+                        <div class="text-gray-200 font-semibold">Inline single-call routines <span class="text-orange-400">(build only)</span></div>
                         <div class="text-gray-400 text-xs">⚠️ <strong>Disabled by default:</strong> Inlines routines called once. Iterative - may significantly restructure code. Best with dead code elimination.</div>
                     </div>
                 </label>
@@ -1493,7 +1497,7 @@
                     replacement: (line) => line.replace(/\b(jp|JP)\b/, 'jr'),
                     explanation: 'JP (3 bytes) can be JR (2 bytes) if target is within -126 to +129 bytes. JR only supports Z, NZ, C, NC conditions.',
                     savings: '1 byte per conversion',
-                    warning: 'Only works if target is in range. Use auto-optimizer for automatic conversion.'
+                    warning: 'Only works if target is in range. Enable "Optimize on Build" for automatic conversion.'
                 },
                 {
                     name: 'DEC B; JP NZ to DJNZ',
@@ -1952,7 +1956,7 @@
                 }
             }
 
-            // Check for magic numbers (repeated immediate values)
+            // Check for magic numbers (repeated immediate values > 255)
             if (optimizerConfig.warnings) {
                 const magicNumbers = detectMagicNumbers(code);
                 magicNumbers.forEach(mn => {
@@ -1960,10 +1964,12 @@
                         name: 'Magic number',
                         category: 'warnings',
                         line: mn.firstLine,
-                        original: `Value ${mn.display} appears ${mn.count} times`,
+                        allLines: mn.lines, // Store all line numbers for highlighting
+                        original: `Value ${mn.display} appears ${mn.lines.length} times`,
                         suggestion: `Define as EQU constant`,
-                        explanation: `The value ${mn.display} is used ${mn.count} times (lines: ${mn.lines.join(', ')}). Consider defining it as a named constant with EQU for better maintainability.`,
-                        savings: 'Code maintainability'
+                        explanation: `The value ${mn.display} is used on lines: ${mn.lines.join(', ')}. Consider defining it as a named constant with EQU for better maintainability.`,
+                        savings: 'Code maintainability',
+                        isMagicNumber: true
                     });
                 });
             }
@@ -1971,13 +1977,10 @@
             return suggestions;
         }
 
-        // Detect repeated magic numbers in code
+        // Detect repeated magic numbers in code (only values > 255, i.e. multi-byte)
         function detectMagicNumbers(code) {
             const lines = code.split('\n');
             const numberUsage = new Map(); // value -> { count, lines[], display }
-
-            // Common values to ignore (0, 1, 255, etc. are often intentional)
-            const ignoreValues = new Set([0, 1, 2, 255, 256, 0xFF, 0x00, 0x01, 0x02]);
 
             lines.forEach((line, index) => {
                 const trimmed = line.trim();
@@ -1990,7 +1993,6 @@
                 // Find immediate values in instructions
                 // Match hex: $xx, 0xXX, XXh
                 // Match decimal: plain numbers
-                // Match binary: %xxxxxxxx, 0bxxxxxxxx
                 const patterns = [
                     /\b0x([0-9a-fA-F]+)\b/g,           // 0xFF
                     /\$([0-9a-fA-F]+)\b/g,             // $FF
@@ -2015,9 +2017,9 @@
                             value = parseInt(matchStr, 10);
                         }
 
-                        // Skip common values and small numbers
-                        if (ignoreValues.has(value) || value < 3 || value > 65535) return;
-                        // Skip if it looks like an address (very large numbers)
+                        // Only detect multi-byte values (> 255) to reduce false positives
+                        // Skip if it looks like an address ($8000+)
+                        if (value <= 255 || value > 65535) return;
                         if (value >= 0x8000 && value <= 0xFFFF) return;
 
                         if (!numberUsage.has(value)) {
@@ -2086,6 +2088,19 @@
                             <div class="text-gray-400 text-xs mb-1">${s.explanation}</div>
                             <span class="text-green-400 text-xs">${s.suggestion}</span>
                         </div>`;
+                    } else if (s.isMagicNumber && s.allLines) {
+                        // Magic number with multiple occurrences - show Highlight All button
+                        const originalDisplay = escapeHtml(s.original);
+                        html += `
+                        <div class="bg-gray-800 rounded p-2 mb-2 border-l-2 ${info.border}" id="suggestion-${idx}">
+                            <div class="flex justify-between items-start mb-1">
+                                <span class="${info.color} text-xs font-bold">${s.name}</span>
+                                <button class="highlight-all-btn text-yellow-400 hover:text-yellow-300 text-xs" data-lines="${s.allLines.join(',')}">Highlight All</button>
+                            </div>
+                            <div class="text-gray-300 text-xs font-mono bg-gray-900 p-1 rounded mb-1">${originalDisplay}</div>
+                            <div class="text-gray-400 text-xs mb-1">${s.explanation}</div>
+                            <span class="text-green-400 text-xs">Use: <code class="bg-gray-700 px-1 rounded">${s.suggestion}</code></span>
+                        </div>`;
                     } else {
                         // Determine line label (single line vs range for multi-line patterns)
                         const lineLabel = s.endLine ? `Lines ${s.line}-${s.endLine}` : `Line ${s.line}`;
@@ -2124,6 +2139,34 @@
                     editor.focus();
                     const lineHandle = editor.addLineClass(lineNum - 1, 'background', 'bg-yellow-900');
                     setTimeout(() => editor.removeLineClass(lineHandle, 'background', 'bg-yellow-900'), 2000);
+                });
+            });
+
+            // Highlight All button for magic numbers - highlights all occurrences
+            let magicNumberMarkers = [];
+            assistantSuggestions.querySelectorAll('.highlight-all-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Clear previous markers
+                    magicNumberMarkers.forEach(m => m.clear());
+                    magicNumberMarkers = [];
+
+                    const lines = btn.dataset.lines.split(',').map(n => parseInt(n));
+
+                    // Add highlight markers for each line
+                    lines.forEach(lineNum => {
+                        const marker = editor.markText(
+                            {line: lineNum - 1, ch: 0},
+                            {line: lineNum - 1, ch: editor.getLine(lineNum - 1).length},
+                            {className: 'magic-number-highlight'}
+                        );
+                        magicNumberMarkers.push(marker);
+                    });
+
+                    // Go to first occurrence
+                    editor.setCursor(lines[0] - 1, 0);
+                    editor.focus();
+
+                    log(`Highlighted ${lines.length} occurrences on lines: ${lines.join(', ')}`, 'info');
                 });
             });
 
