@@ -1286,14 +1286,15 @@
                     name: 'CP 1 to DEC A',
                     category: 'peephole',
                     detect: (line) => /^\s*(cp|CP)\s+1\s*(?:;.*)?$/.test(line),
-                    suggestion: 'dec a',
-                    replacement: (line) => line.replace(/\b(cp|CP)\s+1\b/, 'dec a'),
-                    explanation: 'CP 1 (2 bytes) can often be replaced with DEC A (1 byte) if you only need Z flag and can modify A.',
-                    savings: '1 byte, 3 T-states',
-                    warning: 'Only if A can be modified. DEC A changes A, CP 1 does not.'
+                    suggestion: 'dec a (if A can change)',
+                    replacement: null,
+                    explanation: 'CP 1 (2 bytes) tests if A==1 without changing A. DEC A (1 byte) decrements A and sets Z if result is 0.',
+                    savings: '1 byte (if applicable)',
+                    warning: 'DIFFERENT BEHAVIOR! CP 1 preserves A, DEC A modifies A. Only use if A can be destroyed.',
+                    noApply: true
                 },
                 {
-                    name: 'JP to label (consider JR)',
+                    name: 'JP to label (maybe JR)',
                     category: 'peephole',
                     detect: (line) => {
                         // Match JP with label (not JP (HL), JP (IX), etc.)
@@ -1301,11 +1302,12 @@
                         const match = line.match(/^\s*(jp|JP)\s+(?:(z|nz|c|nc)\s*,\s*)?([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
                         return match !== null;
                     },
-                    suggestion: 'jr (if in range)',
-                    replacement: (line) => line.replace(/\b(jp|JP)\b/, 'jr'),
-                    explanation: 'JP (3 bytes) can be JR (2 bytes) if target is within -126 to +129 bytes. JR only supports Z, NZ, C, NC conditions.',
-                    savings: '1 byte per conversion',
-                    warning: 'Only works if target is in range. Enable "Optimize on Build" for automatic conversion.'
+                    suggestion: 'jr (only if ±127 bytes)',
+                    replacement: null, // Don't auto-replace - too risky without knowing distance
+                    explanation: 'JP (3 bytes) can be JR (2 bytes) ONLY if target is within -126 to +129 bytes. Large loops and jumps over INCLUDEs usually exceed this range.',
+                    savings: '1 byte (if applicable)',
+                    warning: 'DO NOT apply blindly! JR has limited range. Use "Optimize on Build" checkbox for safe automatic conversion.',
+                    noApply: true // Disable auto-apply button - must be done manually or via optimizer
                 },
                 {
                     name: 'DEC B; JP NZ to DJNZ',
@@ -1325,6 +1327,64 @@
                     savings: 'Faster for multiple stores',
                     warning: 'Only beneficial if storing zero to multiple locations.',
                     noApply: true // This is a hint, not auto-applicable
+                },
+                {
+                    name: 'LD HL,0 to LD H,L after XOR A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(ld|LD)\s+(hl|HL)\s*,\s*0\s*(?:;.*)?$/.test(line),
+                    suggestion: 'ld h,a; ld l,a (after xor a)',
+                    explanation: 'LD HL,0 (3 bytes). If A is already 0, use LD H,A; LD L,A (2 bytes).',
+                    savings: '1 byte (if A=0)',
+                    warning: 'Only if A is already zero.',
+                    noApply: true
+                },
+                {
+                    name: 'INC HL x2 to LD DE,2; ADD HL,DE',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(inc|INC)\s+(hl|HL)\s*(?:;.*)?$/.test(line),
+                    suggestion: 'add hl,de (if DE=2)',
+                    explanation: 'Two INC HL (2 bytes, 12 T-states) can be LD DE,2; ADD HL,DE (4 bytes, 21 T-states) - only worthwhile if repeated or DE already loaded.',
+                    savings: 'Context-dependent',
+                    noApply: true
+                },
+                {
+                    name: 'NEG to CPL; INC A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(neg|NEG)\s*(?:;.*)?$/.test(line),
+                    suggestion: 'cpl; inc a (same result)',
+                    explanation: 'NEG (2 bytes, ED prefix) negates A. CPL; INC A (2 bytes, no prefix) does the same but may affect flags differently.',
+                    savings: 'Same size, different flags',
+                    warning: 'Flags differ! NEG sets C if A≠0, CPL;INC sets C on overflow.',
+                    noApply: true
+                },
+                {
+                    name: 'SUB A to XOR A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(sub|SUB)\s+[aA]\s*(?:;.*)?$/.test(line),
+                    suggestion: 'xor a (if flags OK)',
+                    replacement: null,
+                    explanation: 'SUB A and XOR A both set A=0. However flags differ: SUB sets N=1, C=0, H=0. XOR sets N=0, P/V=parity, H=0, C=0.',
+                    savings: 'Same size - style preference only',
+                    warning: 'Flags differ! SUB A: N=1, C=0. XOR A: N=0, P/V=1. Only change if flags not used.',
+                    noApply: true
+                },
+                {
+                    name: 'LD BC,nnnn; LD A,C to LD A,nn',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(ld|LD)\s+(bc|BC)\s*,\s*(\$[0-9a-f]+|0x[0-9a-f]+|[0-9]+)\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'Check if only C is needed',
+                    explanation: 'If you only need the low byte in A, LD A,nn (2 bytes) is smaller than LD BC,nnnn; LD A,C (4 bytes).',
+                    savings: '2 bytes (if applicable)',
+                    noApply: true
+                },
+                {
+                    name: 'Multiple NOPs',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(nop|NOP)\s*(?:;.*)?$/.test(line),
+                    suggestion: 'Check if NOPs are needed',
+                    explanation: 'NOPs waste space and time. Unless used for timing, consider removing them.',
+                    savings: '1 byte per NOP',
+                    noApply: true
                 }
             ],
             warnings: [
@@ -1363,9 +1423,11 @@
                     const dec = line2.match(/^\s*(dec|DEC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
                     return inc && dec && inc[2].toLowerCase() === dec[2].toLowerCase();
                 },
-                suggestion: 'Remove both lines',
-                explanation: 'INC followed immediately by DEC of the same register/memory is a no-op.',
-                savings: '2 bytes, 8+ T-states'
+                suggestion: 'Remove both (if flags unused)',
+                explanation: 'INC followed by DEC of the same register restores the value but modifies flags.',
+                savings: '2 bytes, 8+ T-states',
+                warning: 'Flags are modified! Only remove if flags from DEC are not used afterwards.',
+                noApply: true
             },
             {
                 name: 'DEC/INC pair',
@@ -1375,9 +1437,11 @@
                     const inc = line2.match(/^\s*(inc|INC)\s+([abcdehl]|bc|de|hl|ix|iy|sp|\([^)]+\))\s*(?:;.*)?$/i);
                     return dec && inc && dec[2].toLowerCase() === inc[2].toLowerCase();
                 },
-                suggestion: 'Remove both lines',
-                explanation: 'DEC followed immediately by INC of the same register/memory is a no-op.',
-                savings: '2 bytes, 8+ T-states'
+                suggestion: 'Remove both (if flags unused)',
+                explanation: 'DEC followed by INC of the same register restores the value but modifies flags.',
+                savings: '2 bytes, 8+ T-states',
+                warning: 'Flags are modified! Only remove if flags from INC are not used afterwards.',
+                noApply: true
             },
             {
                 name: 'Redundant LD (overwritten)',
@@ -1414,17 +1478,11 @@
                     const jp = line2.match(/^\s*(jp|JP)\s+(nz|NZ)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
                     return dec && jp;
                 },
-                suggestion: 'djnz label',
+                suggestion: 'djnz label (if ±127 bytes)',
                 explanation: 'DEC B followed by JP NZ (4 bytes) can be DJNZ (2 bytes). Both decrement B and loop if not zero.',
                 savings: '2 bytes, 3 T-states',
-                multiLineReplacement: (line1, line2) => {
-                    const match = line2.match(/^\s*(jp|JP)\s+(nz|NZ)\s*,\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:;.*)?$/i);
-                    if (match) {
-                        const indent = line1.match(/^(\s*)/)[1];
-                        return indent + 'djnz ' + match[3] + '\n';
-                    }
-                    return line1 + '\n' + line2 + '\n';
-                }
+                warning: 'DJNZ uses relative jump with ±127 byte range! Large loops will fail. Use "Optimize on Build" for safe conversion.',
+                noApply: true
             },
             {
                 name: 'SLA L; RL H to ADD HL,HL',
@@ -1441,6 +1499,67 @@
                     const indent = line1.match(/^(\s*)/)[1];
                     return indent + 'add hl,hl\n';
                 }
+            },
+            {
+                name: 'XOR A; LD r,A to LD r,0',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const xor = line1.match(/^\s*(xor|XOR)\s+[aA]\s*(?:;.*)?$/i);
+                    const ld = line2.match(/^\s*(ld|LD)\s+([bcdehl])\s*,\s*[aA]\s*(?:;.*)?$/i);
+                    return xor && ld;
+                },
+                suggestion: 'ld r,0 (if A not needed)',
+                explanation: 'XOR A then LD r,A (2 bytes) can be LD r,0 (2 bytes) - same size but keeps A unchanged.',
+                savings: 'Preserves A register',
+                warning: 'Only if you don\'t need A to be zero afterwards.',
+                noApply: true
+            },
+            {
+                name: 'CP 0 to OR A',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    // Single line pattern - line2 not used
+                    return false; // Handled in single-line patterns
+                },
+                suggestion: 'or a',
+                explanation: 'CP 0 (2 bytes) can be OR A (1 byte). Both set Z flag if A is zero.',
+                savings: '1 byte, 3 T-states'
+            }
+        ];
+
+        // 4-line patterns for more complex optimizations
+        const fourLinePatterns = [
+            {
+                name: 'PUSH HL/PUSH DE/POP HL/POP DE to EX DE,HL',
+                category: 'peephole',
+                detect: (lines) => {
+                    if (lines.length < 4) return false;
+                    const push1 = lines[0].match(/^\s*(push|PUSH)\s+(hl|HL)\s*(?:;.*)?$/i);
+                    const push2 = lines[1].match(/^\s*(push|PUSH)\s+(de|DE)\s*(?:;.*)?$/i);
+                    const pop1 = lines[2].match(/^\s*(pop|POP)\s+(hl|HL)\s*(?:;.*)?$/i);
+                    const pop2 = lines[3].match(/^\s*(pop|POP)\s+(de|DE)\s*(?:;.*)?$/i);
+                    return push1 && push2 && pop1 && pop2;
+                },
+                suggestion: 'ex de,hl',
+                explanation: 'PUSH HL/PUSH DE/POP HL/POP DE (8 bytes, 43 T-states) swaps DE and HL. Use EX DE,HL (1 byte, 4 T-states) instead!',
+                savings: '7 bytes, 39 T-states',
+                lineCount: 4
+            },
+            {
+                name: 'PUSH DE/PUSH HL/POP DE/POP HL to EX DE,HL',
+                category: 'peephole',
+                detect: (lines) => {
+                    if (lines.length < 4) return false;
+                    const push1 = lines[0].match(/^\s*(push|PUSH)\s+(de|DE)\s*(?:;.*)?$/i);
+                    const push2 = lines[1].match(/^\s*(push|PUSH)\s+(hl|HL)\s*(?:;.*)?$/i);
+                    const pop1 = lines[2].match(/^\s*(pop|POP)\s+(de|DE)\s*(?:;.*)?$/i);
+                    const pop2 = lines[3].match(/^\s*(pop|POP)\s+(hl|HL)\s*(?:;.*)?$/i);
+                    return push1 && push2 && pop1 && pop2;
+                },
+                suggestion: 'ex de,hl',
+                explanation: 'PUSH DE/PUSH HL/POP DE/POP HL (8 bytes, 43 T-states) swaps DE and HL. Use EX DE,HL (1 byte, 4 T-states) instead!',
+                savings: '7 bytes, 39 T-states',
+                lineCount: 4
             }
         ];
 
@@ -1736,6 +1855,22 @@
                                     line: lineNum,
                                     endLine: nextIndex + 1,
                                     original: `${trimmed}\n${nextTrimmed}`,
+                                    category: pattern.category,
+                                    ...pattern
+                                });
+                            }
+                        });
+                    }
+
+                    // Check 4-line patterns (like PUSH HL/PUSH DE/POP HL/POP DE → EX DE,HL)
+                    if (lineNum + 3 < lines.length) {
+                        const fourLines = [line, lines[lineNum + 1], lines[lineNum + 2], lines[lineNum + 3]];
+                        fourLinePatterns.forEach(pattern => {
+                            if (pattern.detect(fourLines)) {
+                                suggestions.push({
+                                    line: lineNum,
+                                    endLine: lineNum + 4,
+                                    original: fourLines.map(l => l.trim()).join('\n'),
                                     category: pattern.category,
                                     ...pattern
                                 });
