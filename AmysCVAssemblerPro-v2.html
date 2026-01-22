@@ -6260,9 +6260,14 @@
                             // Collect shadow register usage for consolidated warning
                             const shadowOps = token.operands.filter(o => o.isShadow);
                             if (shadowOps.length > 0) {
+                                const instrStr = `${token.mnemonic} ${token.operands.map(o => {
+                                    if (o.type === 'memory') return `(${o.value})`;
+                                    return o.isShadow ? o.value + "'" : o.value;
+                                }).join(', ')}`;
                                 shadowRegisterUsages.push({
                                     line: token.lineNumber,
-                                    registers: shadowOps.map(o => o.value + "'")
+                                    registers: shadowOps.map(o => o.value + "'"),
+                                    instruction: instrStr
                                 });
                             }
 
@@ -6474,10 +6479,14 @@
                     }
                 }
 
-                // Display consolidated shadow register warning
+                // Display consolidated shadow register warning with details
                 if (shadowRegisterUsages.length > 0) {
                     const uniqueRegs = [...new Set(shadowRegisterUsages.flatMap(u => u.registers))].sort();
-                    log(`Shadow register notation used (${shadowRegisterUsages.length} instances: ${uniqueRegs.join(', ')}). This is documentation-only - ensure EXX/EX AF,AF' was called appropriately.`, 'warn');
+                    log(`Shadow register notation used (${shadowRegisterUsages.length} instances). This is documentation-only - ensure EXX/EX AF,AF' was called appropriately.`, 'warn');
+                    // Show details for each usage
+                    shadowRegisterUsages.forEach(usage => {
+                        log(`  Line ${usage.line}: ${usage.instruction}`, 'warn');
+                    });
                 }
             }
 
