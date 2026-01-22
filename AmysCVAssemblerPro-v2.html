@@ -1243,6 +1243,27 @@
         // Performance optimization: batch log messages and reduce DOM operations
         let logBuffer = [];
         let logFlushTimeout = null;
+        let assemblyWarningCount = 0; // Track warnings during assembly
+
+        // Toast notification for warnings
+        function showWarningToast(count) {
+            // Remove existing toast if any
+            const existingToast = document.getElementById('warning-toast');
+            if (existingToast) existingToast.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'warning-toast';
+            toast.className = 'fixed bottom-4 right-4 bg-yellow-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-pulse';
+            toast.innerHTML = `
+                <span class="text-xl">⚠️</span>
+                <span>${count} warning${count > 1 ? 's' : ''} - check console log</span>
+                <button onclick="this.parentElement.remove()" class="ml-2 text-yellow-200 hover:text-white">&times;</button>
+            `;
+            document.body.appendChild(toast);
+
+            // Auto-remove after 8 seconds
+            setTimeout(() => toast.remove(), 8000);
+        }
 
         const flushLogs = () => {
             if (logBuffer.length === 0) return;
@@ -1274,6 +1295,11 @@
 
             const time = new Date().toLocaleTimeString();
             logBuffer.push({message, type, time});
+
+            // Track warnings for toast notification
+            if (type === 'warn') {
+                assemblyWarningCount++;
+            }
 
             // For errors, flush immediately
             if (type === 'error') {
@@ -3208,9 +3234,10 @@
         }
 
         class Operand {
-            constructor(type, value) { 
-                this.type = type; 
-                this.value = value; 
+            constructor(type, value, isShadow = false) {
+                this.type = type;
+                this.value = value;
+                this.isShadow = isShadow; // Track if shadow register notation was used (A', B', BC', etc.)
             }
         }
         
@@ -3278,7 +3305,8 @@
                 }
                 
                 // IBM style: x'hex', h'hex', o'oct', b'bin'
-                const ibmMatch = str.match(/^([xhobXHOB])'([^']*)'?$/);
+                // Require at least one digit to avoid matching shadow registers like b', h'
+                const ibmMatch = str.match(/^([xhobXHOB])'([^']+)'?$/);
                 if (ibmMatch) {
                     const [, prefix, value] = ibmMatch;
                     switch (prefix.toLowerCase()) {
@@ -3359,9 +3387,17 @@
                             }
                             current = '';
                         } else if ((char === '"' || char === "'") && (i === 0 || operands_str[i-1] !== '\\')) {
-                            inQuotes = true;
-                            quoteChar = char;
-                            current += char;
+                            // Check if this is a shadow register suffix (A', B', BC', etc.)
+                            // Don't enter quote mode if the previous char was alphanumeric
+                            const prevChar = i > 0 ? operands_str[i-1] : '';
+                            if (char === "'" && /[A-Za-z0-9]/.test(prevChar)) {
+                                // This is a shadow register suffix, not a string delimiter
+                                current += char;
+                            } else {
+                                inQuotes = true;
+                                quoteChar = char;
+                                current += char;
+                            }
                         } else {
                             current += char;
                         }
@@ -3420,8 +3456,9 @@
                     // Use after EXX or EX AF,AF' to indicate you're working with alternate bank
                     if (/^(A|B|C|D|E|H|L|I|R|IXH|IXL|IYH|IYL)(\')?$/i.test(part)) {
                         // Strip the ' suffix - shadow registers compile to same opcode
+                        const isShadow = part.endsWith("'");
                         const regName = part.replace(/'$/, '').toUpperCase();
-                        operands.push(new Operand('register', regName));
+                        operands.push(new Operand('register', regName, isShadow));
                         continue;
                     }
 
@@ -3429,8 +3466,10 @@
                     if (/^(AF|BC|DE|HL|SP|IX|IY)(\')?$/i.test(part)) {
                         // Strip the ' suffix - shadow registers compile to same opcode
                         // Exception: AF' is kept as-is for EX AF,AF' instruction
-                        const pairName = part.toUpperCase();
-                        operands.push(new Operand('register_pair', pairName));
+                        const upperPart = part.toUpperCase();
+                        const isShadow = part.endsWith("'") && upperPart !== "AF'"; // AF' is valid syntax for EX AF,AF'
+                        const pairName = (upperPart === "AF'") ? upperPart : upperPart.replace(/'$/, '');
+                        operands.push(new Operand('register_pair', pairName, isShadow));
                         continue;
                     }
                     
@@ -3495,7 +3534,10 @@
                     let trimmedLine = line.split(';')[0].trim();
                     if (!trimmedLine) continue;
 
-                    const parts = trimmedLine.match(/(?:[^\s"']+|"[^"]*"|'[^']*'|AF')+/g) || [];
+                    // Match tokens, handling shadow register notation (A', B', BC', DE', HL', AF')
+                    // The pattern handles: regular tokens, quoted strings, and shadow registers with trailing '
+                    // Order matters: try shadow registers first, then quoted strings, then other tokens
+                    const parts = trimmedLine.match(/[A-Za-z][A-Za-z0-9]*'|"[^"]*"|'[^']*'|[^\s"']+/g) || [];
                     if (parts.length === 0) continue;
 
                     let label = null;
@@ -5904,6 +5946,8 @@
                 this.pc = 0;
                 this.output = [];
                 this.lastNonTempSymbol = '';  // Reset for Pass 3
+                const shadowRegisterUsages = []; // Track shadow register usage for consolidated warning
+
                 for (const token of tokens) {
                     this.currentInstruction = token;
                     this.currentLine = token.lineNumber || 0;
@@ -6213,11 +6257,14 @@
                             // Set current instruction for debug logging
                             this.currentInstruction = token;
 
-                            // DEBUG: Commented out verbose logging
-                            // if (this.currentLine >= 800 && this.currentLine <= 880) {
-                            //     const instrStr = `${token.mnemonic} ${token.operands.map(o => o.value).join(', ')}`;
-                            //     log(`DEBUG INSTR: Line ${this.currentLine}, PC ${this.pc}: ${instrStr}`, 'debug');
-                            // }
+                            // Collect shadow register usage for consolidated warning
+                            const shadowOps = token.operands.filter(o => o.isShadow);
+                            if (shadowOps.length > 0) {
+                                shadowRegisterUsages.push({
+                                    line: token.lineNumber,
+                                    registers: shadowOps.map(o => o.value + "'")
+                                });
+                            }
 
                             const key = this.getOpcodeKey(token);
                             const opcode = Z80_OPCODES[key];
@@ -6425,6 +6472,12 @@
                         };
                         this.listingLines.push(listingEntry);
                     }
+                }
+
+                // Display consolidated shadow register warning
+                if (shadowRegisterUsages.length > 0) {
+                    const uniqueRegs = [...new Set(shadowRegisterUsages.flatMap(u => u.registers))].sort();
+                    log(`Shadow register notation used (${shadowRegisterUsages.length} instances: ${uniqueRegs.join(', ')}). This is documentation-only - ensure EXX/EX AF,AF' was called appropriately.`, 'warn');
                 }
             }
 
@@ -8191,6 +8244,7 @@
         compileBtn.addEventListener('click', async () => {
             consoleOutput.innerHTML = '';
             symbolsOutput.innerHTML = '';
+            assemblyWarningCount = 0; // Reset warning counter
             log('Starting enhanced compilation...');
             downloadBtn.classList.add('hidden');
             exportSymbolsBtn.classList.add('hidden');
@@ -8352,6 +8406,11 @@
 
                 // Flush any pending logs
                 flushLogs();
+
+                // Show toast notification if there were warnings
+                if (assemblyWarningCount > 0) {
+                    showWarningToast(assemblyWarningCount);
+                }
             }
         });
 
