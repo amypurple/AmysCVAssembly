@@ -1321,7 +1321,7 @@
 
         // --- Optimization Assistant ---
         // Known Z80 directives and opcodes for formatting (prefixed with FMT_ to avoid conflict with assembler's Z80_OPCODES)
-        const FMT_DIRECTIVES = ['CPU', 'FNAME', 'EQU', 'SET', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
+        const FMT_DIRECTIVES = ['CPU', 'FNAME', 'EQU', 'SET', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
         const FMT_OPCODES = ['ADD', 'ADC', 'SUB', 'SBC', 'AND', 'OR', 'XOR', 'CP', 'INC', 'DEC', 'LD', 'PUSH', 'POP', 'EX', 'EXX', 'JP', 'JR', 'CALL', 'RET', 'RETI', 'RETN', 'RST', 'DJNZ', 'NOP', 'HALT', 'DI', 'EI', 'IM', 'NEG', 'CPL', 'SCF', 'CCF', 'DAA', 'RLA', 'RRA', 'RLCA', 'RRCA', 'RLD', 'RRD', 'LDI', 'LDIR', 'LDD', 'LDDR', 'CPI', 'CPIR', 'CPD', 'CPDR', 'IN', 'OUT', 'INI', 'IND', 'OUTI', 'OUTD', 'RLC', 'RRC', 'RL', 'RR', 'SLA', 'SRA', 'SLL', 'SRL', 'BIT', 'RES', 'SET'];
         const FMT_REGISTERS = ['A', 'B', 'C', 'D', 'E', 'H', 'L', 'I', 'R', 'AF', 'BC', 'DE', 'HL', 'SP', 'IX', 'IY', "AF'", 'IXH', 'IXL', 'IYH', 'IYL'];
         const FMT_CONDITIONS = ['NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M'];
@@ -3217,7 +3217,7 @@
                 this.code = code;
                 this.tokens = [];
                 this.numberParser = new NumberParser();
-                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
+                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
                 this.tempSymbolCounters = {
                     named: 0,
                     plus: 0,
@@ -3580,7 +3580,26 @@
             'xor_ixl': [0xDD, 0xAD], 'xor_(ix+offset)': [0xDD, 0xAE], 'or_ixh': [0xDD, 0xB4], 'or_ixl': [0xDD, 0xB5], 
             'or_(ix+offset)': [0xDD, 0xB6], 'cp_ixh': [0xDD, 0xBC], 'cp_ixl': [0xDD, 0xBD], 'cp_(ix+offset)': [0xDD, 0xBE],
             'pop_ix': [0xDD, 0xE1], 'ex_(sp),ix': [0xDD, 0xE3], 'push_ix': [0xDD, 0xE5], 'jp_(ix)': [0xDD, 0xE9], 'ld_sp,ix': [0xDD, 0xF9],
-            
+
+            // DD CB prefix opcodes - IX+offset bit operations (4-byte: DD CB offset opcode)
+            // Format: [0xDD, 0xCB, final_opcode] - offset byte inserted between CB and opcode during generation
+            'rlc_(ix+offset)': [0xDD, 0xCB, 0x06], 'rrc_(ix+offset)': [0xDD, 0xCB, 0x0E],
+            'rl_(ix+offset)': [0xDD, 0xCB, 0x16], 'rr_(ix+offset)': [0xDD, 0xCB, 0x1E],
+            'sla_(ix+offset)': [0xDD, 0xCB, 0x26], 'sra_(ix+offset)': [0xDD, 0xCB, 0x2E],
+            'sll_(ix+offset)': [0xDD, 0xCB, 0x36], 'srl_(ix+offset)': [0xDD, 0xCB, 0x3E],
+            'bit_0,(ix+offset)': [0xDD, 0xCB, 0x46], 'bit_1,(ix+offset)': [0xDD, 0xCB, 0x4E],
+            'bit_2,(ix+offset)': [0xDD, 0xCB, 0x56], 'bit_3,(ix+offset)': [0xDD, 0xCB, 0x5E],
+            'bit_4,(ix+offset)': [0xDD, 0xCB, 0x66], 'bit_5,(ix+offset)': [0xDD, 0xCB, 0x6E],
+            'bit_6,(ix+offset)': [0xDD, 0xCB, 0x76], 'bit_7,(ix+offset)': [0xDD, 0xCB, 0x7E],
+            'res_0,(ix+offset)': [0xDD, 0xCB, 0x86], 'res_1,(ix+offset)': [0xDD, 0xCB, 0x8E],
+            'res_2,(ix+offset)': [0xDD, 0xCB, 0x96], 'res_3,(ix+offset)': [0xDD, 0xCB, 0x9E],
+            'res_4,(ix+offset)': [0xDD, 0xCB, 0xA6], 'res_5,(ix+offset)': [0xDD, 0xCB, 0xAE],
+            'res_6,(ix+offset)': [0xDD, 0xCB, 0xB6], 'res_7,(ix+offset)': [0xDD, 0xCB, 0xBE],
+            'set_0,(ix+offset)': [0xDD, 0xCB, 0xC6], 'set_1,(ix+offset)': [0xDD, 0xCB, 0xCE],
+            'set_2,(ix+offset)': [0xDD, 0xCB, 0xD6], 'set_3,(ix+offset)': [0xDD, 0xCB, 0xDE],
+            'set_4,(ix+offset)': [0xDD, 0xCB, 0xE6], 'set_5,(ix+offset)': [0xDD, 0xCB, 0xEE],
+            'set_6,(ix+offset)': [0xDD, 0xCB, 0xF6], 'set_7,(ix+offset)': [0xDD, 0xCB, 0xFE],
+
             // FD prefix opcodes - IY operations
             'add_iy,bc': [0xFD, 0x09], 'add_iy,de': [0xFD, 0x19], 'ld_iy,imm16': [0xFD, 0x21], 'ld_(imm16),iy': [0xFD, 0x22], 
             'inc_iy': [0xFD, 0x23], 'inc_iyh': [0xFD, 0x24], 'dec_iyh': [0xFD, 0x25], 'ld_iyh,imm8': [0xFD, 0x26],
@@ -3603,6 +3622,25 @@
             'xor_iyl': [0xFD, 0xAD], 'xor_(iy+offset)': [0xFD, 0xAE], 'or_iyh': [0xFD, 0xB4], 'or_iyl': [0xFD, 0xB5], 
             'or_(iy+offset)': [0xFD, 0xB6], 'cp_iyh': [0xFD, 0xBC], 'cp_iyl': [0xFD, 0xBD], 'cp_(iy+offset)': [0xFD, 0xBE],
             'pop_iy': [0xFD, 0xE1], 'ex_(sp),iy': [0xFD, 0xE3], 'push_iy': [0xFD, 0xE5], 'jp_(iy)': [0xFD, 0xE9], 'ld_sp,iy': [0xFD, 0xF9],
+
+            // FD CB prefix opcodes - IY+offset bit operations (4-byte: FD CB offset opcode)
+            // Format: [0xFD, 0xCB, final_opcode] - offset byte inserted between CB and opcode during generation
+            'rlc_(iy+offset)': [0xFD, 0xCB, 0x06], 'rrc_(iy+offset)': [0xFD, 0xCB, 0x0E],
+            'rl_(iy+offset)': [0xFD, 0xCB, 0x16], 'rr_(iy+offset)': [0xFD, 0xCB, 0x1E],
+            'sla_(iy+offset)': [0xFD, 0xCB, 0x26], 'sra_(iy+offset)': [0xFD, 0xCB, 0x2E],
+            'sll_(iy+offset)': [0xFD, 0xCB, 0x36], 'srl_(iy+offset)': [0xFD, 0xCB, 0x3E],
+            'bit_0,(iy+offset)': [0xFD, 0xCB, 0x46], 'bit_1,(iy+offset)': [0xFD, 0xCB, 0x4E],
+            'bit_2,(iy+offset)': [0xFD, 0xCB, 0x56], 'bit_3,(iy+offset)': [0xFD, 0xCB, 0x5E],
+            'bit_4,(iy+offset)': [0xFD, 0xCB, 0x66], 'bit_5,(iy+offset)': [0xFD, 0xCB, 0x6E],
+            'bit_6,(iy+offset)': [0xFD, 0xCB, 0x76], 'bit_7,(iy+offset)': [0xFD, 0xCB, 0x7E],
+            'res_0,(iy+offset)': [0xFD, 0xCB, 0x86], 'res_1,(iy+offset)': [0xFD, 0xCB, 0x8E],
+            'res_2,(iy+offset)': [0xFD, 0xCB, 0x96], 'res_3,(iy+offset)': [0xFD, 0xCB, 0x9E],
+            'res_4,(iy+offset)': [0xFD, 0xCB, 0xA6], 'res_5,(iy+offset)': [0xFD, 0xCB, 0xAE],
+            'res_6,(iy+offset)': [0xFD, 0xCB, 0xB6], 'res_7,(iy+offset)': [0xFD, 0xCB, 0xBE],
+            'set_0,(iy+offset)': [0xFD, 0xCB, 0xC6], 'set_1,(iy+offset)': [0xFD, 0xCB, 0xCE],
+            'set_2,(iy+offset)': [0xFD, 0xCB, 0xD6], 'set_3,(iy+offset)': [0xFD, 0xCB, 0xDE],
+            'set_4,(iy+offset)': [0xFD, 0xCB, 0xE6], 'set_5,(iy+offset)': [0xFD, 0xCB, 0xEE],
+            'set_6,(iy+offset)': [0xFD, 0xCB, 0xF6], 'set_7,(iy+offset)': [0xFD, 0xCB, 0xFE],
         };
 
         // --- BitStreamWriter for .REL file generation ---
@@ -4279,6 +4317,7 @@
                 this.macroCounter = 0; // For unique macro labels with \@
                 this.numberParser = new NumberParser();
                 this.currentSection = 'CODE'; // Track current section: 'CODE', 'DATA', or 'BSS'
+                this.sectionPCs = { CODE: 0, DATA: 0, BSS: 0 }; // Track PC for each section
                 this.listingLines = []; // For .LST file generation
                 this.sourceLines = [];   // Store original source lines
                 this.errorCount = 0;     // Track errors for listing
@@ -4685,8 +4724,8 @@
                             log(`Defined structure: ${currentStruct.name} (size: ${currentStruct.size} bytes)`);
                             currentStruct = null;
                         } else {
-                            // Parse field definition: fieldName DB/DW/DS size
-                            const fieldMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+(DB|DW|DS|DEFB|DEFW|DEFS)\s+(.+)$/i);
+                            // Parse field definition: fieldName DB/DW/DS/BLOCK size
+                            const fieldMatch = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+(DB|DW|DS|DEFB|DEFW|DEFS|BLOCK)\s+(.+)$/i);
                             if (fieldMatch) {
                                 const fieldName = fieldMatch[1];
                                 const fieldType = fieldMatch[2].toUpperCase();
@@ -4710,10 +4749,12 @@
                                         fieldBytes = 2; // Default to 2 bytes
                                         log(`  Field ${fieldName} DW ${fieldSize} -> FAILED, using default 2 bytes: ${e.message}`, 'warn');
                                     }
-                                } else if (fieldType === 'DS' || fieldType === 'DEFS') {
-                                    // DS: reserve N bytes
+                                } else if (fieldType === 'DS' || fieldType === 'DEFS' || fieldType === 'BLOCK') {
+                                    // DS/BLOCK: reserve N bytes
+                                    // DS n or DS n, fill - extract just the count (first argument)
                                     try {
-                                        fieldBytes = this.evaluateExpressionSimple(fieldSize);
+                                        const dsSizeExpr = fieldSize.split(',')[0].trim();
+                                        fieldBytes = this.evaluateExpressionSimple(dsSizeExpr);
                                     } catch (e) {
                                         fieldBytes = 1;
                                     }
@@ -5230,6 +5271,14 @@
                                     const newPC = this.evaluateExpression(token.operands[0]);
                                     const wasInBSS = (this.currentSection === 'BSS');
 
+                                    // Initialize sectionPCs on first ORG
+                                    if (this.firstOrg === null) {
+                                        this.firstOrg = newPC;
+                                        this.sectionPCs.CODE = newPC;
+                                        this.sectionPCs.DATA = newPC;
+                                        this.sectionPCs.BSS = newPC;
+                                    }
+
                                     // Auto-detect BSS section: backward ORG or ORG to address < romPC
                                     // This provides backwards compatibility for code without explicit SECTION directives
                                     if (newPC < this.pc || (this.firstOrg !== null && newPC < this.firstOrg + romPC)) {
@@ -5254,6 +5303,7 @@
                                     }
 
                                     this.pc = newPC;
+                                    this.sectionPCs[this.currentSection] = newPC;
                                     this.trackFileStart(currentSourceFile, this.pc);
                                     break;
                                 case 'EQU':
@@ -5324,47 +5374,82 @@
                                     if (!inBSSSection) romPC += dwSize;
                                     break;
                                 case 'DS': case 'DEFS':
-                                    // DS/DEFS: Reserve space for RAM variables
-                                    // Can ONLY be used in BSS sections (RAM), NOT in CODE/DATA sections (ROM)
-                                    if (this.currentSection !== 'BSS') {
-                                        log(`ERROR: DS directive at line ${this.currentLine} can only be used in BSS section (RAM)`, 'error');
-                                        throw new Error(`DS directive at line ${this.currentLine} can only be used in BSS section (RAM). ROM is read-only and cannot contain variables. Use 'SECTION BSS' before DS directives.`);
+                                    // DS/DEFS: Reserve space
+                                    // DS n - only in BSS (uninitialized RAM)
+                                    // DS n, fill - allowed anywhere (fills with byte value)
+                                    {
+                                        const dsSize = this.evaluateExpression(token.operands[0]);
+                                        const hasFillValue = token.operands.length > 1;
+
+                                        if (!hasFillValue && this.currentSection !== 'BSS') {
+                                            log(`ERROR: DS directive at line ${this.currentLine} without fill value can only be used in BSS section`, 'error');
+                                            throw new Error(`DS directive at line ${this.currentLine} without fill value can only be used in BSS section (RAM). Use 'DS ${dsSize}, 0' to fill with zeros in ROM, or 'SECTION BSS' for uninitialized RAM.`);
+                                        }
+                                        if (dsSize > 65536) {
+                                            log(`ERROR: DS directive at line ${this.currentLine} (Pass 2) has suspiciously large size: ${dsSize}`, 'error');
+                                            throw new Error(`DS size too large: ${dsSize} (max 65536). Check operand: ${token.operands[0].value}`);
+                                        }
+                                        this.pc += dsSize;
+                                        if (!inBSSSection) romPC += dsSize;
                                     }
-                                    const dsSize = this.evaluateExpression(token.operands[0]);
-                                    if (dsSize > 65536) {
-                                        log(`ERROR: DS directive at line ${this.currentLine} (Pass 2) has suspiciously large size: ${dsSize} (operand: ${token.operands[0].value})`, 'error');
-                                        throw new Error(`DS size too large: ${dsSize} (max 65536). Check operand: ${token.operands[0].value}`);
+                                    break;
+                                case 'BLOCK':
+                                    // BLOCK count [, fill] - reserve space filled with value (default 0)
+                                    // Similar to DS but fill value defaults to 0 instead of requiring BSS
+                                    {
+                                        const blockSize = this.evaluateExpression(token.operands[0]);
+                                        this.pc += blockSize;
+                                        if (!inBSSSection) romPC += blockSize;
                                     }
-                                    this.pc += dsSize;
-                                    if (!inBSSSection) romPC += dsSize;
                                     break;
                                 case 'INCBIN':
-                                    // Enhanced INCBIN with SKIP, READ, FSIZE parameters (WLA-DX style)
+                                    // Enhanced INCBIN supporting multiple styles:
+                                    // Style 1 (positional): INCBIN "file.bin" [, offset [, length]]
+                                    // Style 2 (WLA-DX): INCBIN "file.bin", SKIP n, READ n, FSIZE label
                                     const incbinFilename = token.operands[0].value;
                                     const incbinFullData = this.findFile(incbinFilename);
 
-                                    // Parse optional SKIP and READ parameters
+                                    // Parse optional parameters
                                     let incbinSkip = 0;
                                     let incbinRead = incbinFullData.length;
                                     let incbinFsizeLabel = null;
 
-                                    // Check for named parameters (SKIP, READ, FSIZE) in any order
-                                    for (let i = 1; i < token.operands.length; i++) {
-                                        const operand = token.operands[i];
-                                        if (operand.type === 'symbol') {
-                                            const paramName = operand.value.toUpperCase();
-                                            if (paramName === 'SKIP' && i + 1 < token.operands.length) {
-                                                const skipValue = this.evaluateExpression(token.operands[i + 1]);
-                                                incbinSkip = skipValue < 0 ? incbinFullData.length + skipValue : skipValue;
-                                                i++; // Skip next operand (value)
-                                            } else if (paramName === 'READ' && i + 1 < token.operands.length) {
-                                                const readValue = this.evaluateExpression(token.operands[i + 1]);
-                                                incbinRead = readValue < 0 ? incbinFullData.length + readValue - incbinSkip : readValue;
-                                                i++; // Skip next operand (value)
-                                            } else if (paramName === 'FSIZE' && i + 1 < token.operands.length) {
-                                                incbinFsizeLabel = token.operands[i + 1].value;
-                                                i++; // Skip next operand (label name)
+                                    // Check if using named parameters (SKIP, READ, FSIZE) or positional
+                                    const hasNamedParams = token.operands.length > 1 &&
+                                        token.operands.slice(1).some(op =>
+                                            op.type === 'symbol' && ['SKIP', 'READ', 'FSIZE'].includes(op.value.toUpperCase())
+                                        );
+
+                                    if (hasNamedParams) {
+                                        // WLA-DX style named parameters
+                                        for (let i = 1; i < token.operands.length; i++) {
+                                            const operand = token.operands[i];
+                                            if (operand.type === 'symbol') {
+                                                const paramName = operand.value.toUpperCase();
+                                                if (paramName === 'SKIP' && i + 1 < token.operands.length) {
+                                                    const skipValue = this.evaluateExpression(token.operands[i + 1]);
+                                                    incbinSkip = skipValue < 0 ? incbinFullData.length + skipValue : skipValue;
+                                                    i++; // Skip next operand (value)
+                                                } else if (paramName === 'READ' && i + 1 < token.operands.length) {
+                                                    const readValue = this.evaluateExpression(token.operands[i + 1]);
+                                                    incbinRead = readValue < 0 ? incbinFullData.length + readValue - incbinSkip : readValue;
+                                                    i++; // Skip next operand (value)
+                                                } else if (paramName === 'FSIZE' && i + 1 < token.operands.length) {
+                                                    incbinFsizeLabel = token.operands[i + 1].value;
+                                                    i++; // Skip next operand (label name)
+                                                }
                                             }
+                                        }
+                                    } else {
+                                        // Positional style: INCBIN "file", offset, length
+                                        if (token.operands.length > 1) {
+                                            incbinSkip = this.evaluateExpression(token.operands[1]);
+                                        }
+                                        if (token.operands.length > 2) {
+                                            incbinRead = this.evaluateExpression(token.operands[2]);
+                                        } else if (token.operands.length > 1) {
+                                            // If only offset given, read from offset to end
+                                            incbinRead = incbinFullData.length - incbinSkip;
                                         }
                                     }
 
@@ -5417,7 +5502,18 @@
                                             throw new Error(`SECTION directive at line ${this.currentLine}: Invalid section '${sectionName}'. Valid sections: CODE, DATA, BSS`);
                                         }
 
+                                        // Save current section's PC before switching
+                                        this.sectionPCs[this.currentSection] = this.pc;
+
+                                        // Switch to new section
                                         this.currentSection = sectionName;
+
+                                        // If this section hasn't been used yet (PC still at initial ORG),
+                                        // continue from current position instead of jumping back
+                                        if (this.sectionPCs[sectionName] === this.firstOrg && sectionName !== 'CODE') {
+                                            this.sectionPCs[sectionName] = this.pc;
+                                        }
+                                        this.pc = this.sectionPCs[sectionName];
                                         inBSSSection = (sectionName === 'BSS');
 
                                         if (this.currentPass === 1) {
@@ -5587,10 +5683,19 @@
                             const opcode = Z80_OPCODES[key];
                             let instrSize = 0;
                             if (opcode) {
-                                instrSize = opcode.length;
-                                if (key.includes('imm8') || key.includes('rel8')) instrSize += 1;
-                                if (key.includes('imm16')) instrSize += 2;
-                                if (key.includes('offset')) instrSize += 1; // IX/IY offset
+                                // Check for DD CB / FD CB instructions (4 bytes: prefix, CB, offset, opcode)
+                                const isDDCB = opcode.length >= 2 && opcode[0] === 0xDD && opcode[1] === 0xCB;
+                                const isFDCB = opcode.length >= 2 && opcode[0] === 0xFD && opcode[1] === 0xCB;
+
+                                if (isDDCB || isFDCB) {
+                                    // DD CB / FD CB instructions are 4 bytes: prefix + CB + offset + opcode
+                                    instrSize = 4;
+                                } else {
+                                    instrSize = opcode.length;
+                                    if (key.includes('imm8') || key.includes('rel8')) instrSize += 1;
+                                    if (key.includes('imm16')) instrSize += 2;
+                                    if (key.includes('offset')) instrSize += 1; // IX/IY offset
+                                }
                                 this.pc += instrSize;
                             } else {
                                 // Fallback size estimation for unknown opcodes
@@ -5768,7 +5873,13 @@
                                     const newPC = this.evaluateExpression(token.operands[0]);
 
                                     // CRITICAL: Set firstOrg BEFORE filling buffer
-                                    if (this.firstOrg === null) this.firstOrg = newPC;
+                                    if (this.firstOrg === null) {
+                                        this.firstOrg = newPC;
+                                        // Initialize all section PCs to the first ORG address
+                                        this.sectionPCs.CODE = newPC;
+                                        this.sectionPCs.DATA = newPC;
+                                        this.sectionPCs.BSS = newPC;
+                                    }
 
                                     // Auto-detect BSS section based on ORG address
                                     // If ORG goes backward or to RAM area, it's BSS
@@ -5779,6 +5890,7 @@
                                     }
 
                                     this.pc = newPC;
+                                    this.sectionPCs[this.currentSection] = newPC;
 
                                     // DEBUG: Log all ORG directives
                                     if (this.currentLine <= 900) {
@@ -5826,44 +5938,90 @@
                                     });
                                     break;
                                 case 'DS': case 'DEFS':
-                                    // DS/DEFS: Reserve space for RAM variables
-                                    // Can ONLY be used in BSS sections (RAM), NOT in CODE/DATA sections (ROM)
-                                    if (this.currentSection !== 'BSS') {
-                                        log(`ERROR: DS directive at line ${this.currentLine} can only be used in BSS section (RAM)`, 'error');
-                                        throw new Error(`DS directive at line ${this.currentLine} can only be used in BSS section (RAM). ROM is read-only and cannot contain variables. Use 'SECTION BSS' before DS directives.`);
+                                    // DS/DEFS: Reserve space
+                                    // DS n - only in BSS (uninitialized RAM, no output)
+                                    // DS n, fill - allowed anywhere (fills with byte value)
+                                    {
+                                        const dsSize = this.evaluateExpression(token.operands[0]);
+                                        const hasFillValue = token.operands.length > 1;
+
+                                        if (!hasFillValue && this.currentSection !== 'BSS') {
+                                            log(`ERROR: DS directive at line ${this.currentLine} without fill value can only be used in BSS section`, 'error');
+                                            throw new Error(`DS directive at line ${this.currentLine} without fill value can only be used in BSS section (RAM). Use 'DS ${dsSize}, 0' to fill with zeros in ROM, or 'SECTION BSS' for uninitialized RAM.`);
+                                        }
+                                        if (dsSize > 65536) {
+                                            log(`ERROR: DS directive at line ${this.currentLine} has suspiciously large size: ${dsSize}`, 'error');
+                                            throw new Error(`DS size too large: ${dsSize} (max 65536). Check operand: ${token.operands[0].value}`);
+                                        }
+
+                                        if (hasFillValue) {
+                                            // Fill with specified byte value (for ROM)
+                                            const fillValue = this.evaluateExpression(token.operands[1]) & 0xFF;
+                                            for (let i = 0; i < dsSize; i++) {
+                                                this.output.push(fillValue);
+                                            }
+                                        }
+                                        // In BSS, just advance PC without output
+                                        this.pc += dsSize;
                                     }
-                                    const size = this.evaluateExpression(token.operands[0]);
-                                    if (size > 65536) {
-                                        log(`ERROR: DS directive at line ${this.currentLine} has suspiciously large size: ${size} (operand: ${token.operands[0].value})`, 'error');
-                                        throw new Error(`DS size too large: ${size} (max 65536). Check operand: ${token.operands[0].value}`);
+                                    break;
+                                case 'BLOCK':
+                                    // BLOCK count [, fill] - reserve space filled with value (default 0)
+                                    {
+                                        const blockSize = this.evaluateExpression(token.operands[0]);
+                                        const fillValue = token.operands.length > 1
+                                            ? this.evaluateExpression(token.operands[1]) & 0xFF
+                                            : 0;
+                                        for (let i = 0; i < blockSize; i++) {
+                                            this.output.push(fillValue);
+                                        }
+                                        this.pc += blockSize;
                                     }
-                                    // Advance PC to reserve RAM space, but don't output any bytes
-                                    this.pc += size;
                                     break;
                                 case 'INCBIN':
-                                    // Enhanced INCBIN with SKIP, READ, FSIZE parameters (WLA-DX style)
+                                    // Enhanced INCBIN supporting multiple styles (same as Pass 2)
                                     const incbinFilename_p3 = token.operands[0].value;
                                     const incbinFullData_p3 = this.findFile(incbinFilename_p3);
 
-                                    // Parse optional SKIP and READ parameters (same as Pass 2)
+                                    // Parse optional parameters
                                     let incbinSkip_p3 = 0;
                                     let incbinRead_p3 = incbinFullData_p3.length;
 
-                                    for (let i = 1; i < token.operands.length; i++) {
-                                        const operand = token.operands[i];
-                                        if (operand.type === 'symbol') {
-                                            const paramName = operand.value.toUpperCase();
-                                            if (paramName === 'SKIP' && i + 1 < token.operands.length) {
-                                                const skipValue = this.evaluateExpression(token.operands[i + 1]);
-                                                incbinSkip_p3 = skipValue < 0 ? incbinFullData_p3.length + skipValue : skipValue;
-                                                i++;
-                                            } else if (paramName === 'READ' && i + 1 < token.operands.length) {
-                                                const readValue = this.evaluateExpression(token.operands[i + 1]);
-                                                incbinRead_p3 = readValue < 0 ? incbinFullData_p3.length + readValue - incbinSkip_p3 : readValue;
-                                                i++;
-                                            } else if (paramName === 'FSIZE') {
-                                                i++; // Skip label name (already processed in Pass 2)
+                                    // Check if using named parameters or positional
+                                    const hasNamedParams_p3 = token.operands.length > 1 &&
+                                        token.operands.slice(1).some(op =>
+                                            op.type === 'symbol' && ['SKIP', 'READ', 'FSIZE'].includes(op.value.toUpperCase())
+                                        );
+
+                                    if (hasNamedParams_p3) {
+                                        // WLA-DX style named parameters
+                                        for (let i = 1; i < token.operands.length; i++) {
+                                            const operand = token.operands[i];
+                                            if (operand.type === 'symbol') {
+                                                const paramName = operand.value.toUpperCase();
+                                                if (paramName === 'SKIP' && i + 1 < token.operands.length) {
+                                                    const skipValue = this.evaluateExpression(token.operands[i + 1]);
+                                                    incbinSkip_p3 = skipValue < 0 ? incbinFullData_p3.length + skipValue : skipValue;
+                                                    i++;
+                                                } else if (paramName === 'READ' && i + 1 < token.operands.length) {
+                                                    const readValue = this.evaluateExpression(token.operands[i + 1]);
+                                                    incbinRead_p3 = readValue < 0 ? incbinFullData_p3.length + readValue - incbinSkip_p3 : readValue;
+                                                    i++;
+                                                } else if (paramName === 'FSIZE') {
+                                                    i++; // Skip label name (already processed in Pass 2)
+                                                }
                                             }
+                                        }
+                                    } else {
+                                        // Positional style: INCBIN "file", offset, length
+                                        if (token.operands.length > 1) {
+                                            incbinSkip_p3 = this.evaluateExpression(token.operands[1]);
+                                        }
+                                        if (token.operands.length > 2) {
+                                            incbinRead_p3 = this.evaluateExpression(token.operands[2]);
+                                        } else if (token.operands.length > 1) {
+                                            // If only offset given, read from offset to end
+                                            incbinRead_p3 = incbinFullData_p3.length - incbinSkip_p3;
                                         }
                                     }
 
@@ -5886,7 +6044,18 @@
                                             throw new Error(`SECTION directive at line ${this.currentLine}: Invalid section '${sectionName}'. Valid sections: CODE, DATA, BSS`);
                                         }
 
+                                        // Save current section's PC before switching
+                                        this.sectionPCs[this.currentSection] = this.pc;
+
+                                        // Switch to new section
                                         this.currentSection = sectionName;
+
+                                        // If this section hasn't been used yet (PC still at initial ORG),
+                                        // continue from current position instead of jumping back
+                                        if (this.sectionPCs[sectionName] === this.firstOrg && sectionName !== 'CODE') {
+                                            this.sectionPCs[sectionName] = this.pc;
+                                        }
+                                        this.pc = this.sectionPCs[sectionName];
                                     } else {
                                         throw new Error(`SECTION directive at line ${this.currentLine}: Requires a section name (CODE, DATA, or BSS)`);
                                     }
@@ -5952,102 +6121,148 @@
                                 throw new Error(errorMsg);
                             }
 
-                            this.output.push(...opcode);
-                            
-                            // Handle operands
-                            if (key.includes('imm16')) {
-                                 const operand = token.operands.find(o => o.type === 'symbol' || o.type === 'immediate' || (o.type === 'memory' && (typeof o.value === 'number' || (typeof o.value === 'string' && !['bc','de','hl','sp','c'].includes(o.value.toLowerCase())))));
-                                 if (!operand) throw new Error(`No 16-bit operand found for instruction: ${token.mnemonic}`);
+                            // Check for DD CB / FD CB instructions (special byte order: prefix, CB, offset, opcode)
+                            const isDDCB = opcode.length >= 2 && opcode[0] === 0xDD && opcode[1] === 0xCB;
+                            const isFDCB = opcode.length >= 2 && opcode[0] === 0xFD && opcode[1] === 0xCB;
 
-                                 let val;
-                                 let symbolForRelocation = null;
+                            if (isDDCB || isFDCB) {
+                                // DD CB / FD CB instructions: output prefix, CB, then offset, then final opcode
+                                this.output.push(opcode[0]); // DD or FD
+                                this.output.push(0xCB);      // CB prefix
 
-                                 if (operand.type === 'memory') {
-                                     if (typeof operand.value === 'number') {
-                                         val = operand.value;
-                                     } else {
-                                         // Memory operand with symbol - evaluate the symbol inside the parentheses
-                                         symbolForRelocation = {type: 'symbol', value: operand.value};
-                                         val = this.evaluateExpression(symbolForRelocation);
-                                     }
-                                 } else {
-                                     val = this.evaluateExpression(operand);
-                                     if (operand.type === 'symbol') {
-                                         symbolForRelocation = operand;
-                                     }
-                                 }
-
-                                 // Pro version: Track relocation for symbol references
-                                 if (symbolForRelocation && this.needsRelocation(symbolForRelocation)) {
-                                     // In .REL mode, use output buffer position; in binary mode, use PC
-                                     const location = this.outputMode === 'rel' ? this.output.length : (this.pc + opcode.length);
-                                     this.trackRelocation(symbolForRelocation.value, location, true);
-                                 }
-
-                                 this.output.push(val & 0xFF);
-                                 this.output.push((val >> 8) & 0xFF);
-                            } else if (key.includes('imm8')) {
-                                const operand = token.operands.find(o => 
-                                    o.type === 'symbol' || 
-                                    o.type === 'immediate' ||
-                                    (o.type === 'memory' && (typeof o.value === 'number' || (typeof o.value === 'string' && !['bc','de','hl','sp','c'].includes(o.value.toLowerCase()))))
-                                );
-                                if (!operand) throw new Error(`No 8-bit operand found for instruction: ${token.mnemonic}`);
-                                
-                                let val;
-                                if (operand.type === 'memory') {
-                                    if (typeof operand.value === 'number') {
-                                        val = operand.value;
-                                    } else {
-                                        // Memory operand with symbol - evaluate the symbol inside the parentheses
-                                        val = this.evaluateExpression({type: 'symbol', value: operand.value});
-                                    }
-                                } else {
-                                    val = this.evaluateExpression(operand);
-                                }
-                                this.output.push(val & 0xFF);
-                            } else if (key.includes('rel8')) {
-                                const operand = token.operands.find(o => o.type === 'symbol' || o.type === 'immediate');
-                                const targetAddr = this.evaluateExpression(operand);
-                                // Calculate current address: PC + instruction size (opcode bytes + 1 displacement byte)
-                                const instrSize = opcode.length + 1;
-
-                                // Pro version: In .REL mode, use output buffer position for relative jumps
-                                // In binary mode, use absolute PC
-                                let currentAddr, adjustedTargetAddr;
-                                if (this.outputMode === 'rel') {
-                                    // Use output buffer positions (0-based)
-                                    currentAddr = this.output.length + instrSize;
-                                    // Target is also relative to segment start
-                                    adjustedTargetAddr = targetAddr - (this.firstOrg || 0);
-                                } else {
-                                    // Binary mode: use absolute addresses
-                                    currentAddr = this.pc + instrSize;
-                                    adjustedTargetAddr = targetAddr;
-                                }
-
-                                // log(`DEBUG DJNZ: mnemonic=${token.mnemonic}, PC=${this.pc}, instrSize=${instrSize}, currentAddr=${currentAddr}, targetAddr=${targetAddr}, adjustedTargetAddr=${adjustedTargetAddr}`, 'debug');
-                                let offset = adjustedTargetAddr - currentAddr;
-                                if (offset < -128 || offset > 127) throw new Error(`Relative jump out of range for ${token.mnemonic}: offset ${offset} (target: ${adjustedTargetAddr}, current: ${currentAddr})`);
-                                if (offset < 0) offset += 256;
-                                this.output.push(offset);
-                            } else if (key.includes('offset')) {
-                                // IX/IY displacement - improved parsing for all formats
+                                // Extract and output the offset
                                 const offsetOperand = token.operands.find(o => o.type === 'memory' && typeof o.value === 'string');
                                 if (offsetOperand) {
-                                    // Extract offset from formats like: IX+5, IY-10, IX+SYMBOL, IX (zero offset)
-                                    const match = offsetOperand.value.match(/(?:IX|IY)\s*([+-])\s*(.+)/i) ||
-                                                  offsetOperand.value.match(/(?:IX|IY)\s*$/i);
+                                    const match = offsetOperand.value.match(/(?:IX|IY)\s*([+-])\s*(.+)/i);
                                     if (match && match[1] && match[2]) {
-                                        // Has explicit offset: IX+5 or IY-SYMBOL
                                         const sign = match[1] === '-' ? -1 : 1;
                                         const offsetValue = this.evaluateExpression({type: 'symbol', value: match[2]});
                                         const signedOffset = sign * offsetValue;
                                         this.output.push(signedOffset & 0xFF);
                                     } else {
-                                        // No offset or just IX/IY - use 0
-                                        this.output.push(0);
+                                        this.output.push(0); // No offset
                                     }
+                                } else {
+                                    this.output.push(0); // No offset
+                                }
+
+                                this.output.push(opcode[2]); // Final opcode byte
+                            } else {
+                                this.output.push(...opcode);
+                            }
+
+                            // Handle operands (skip for DD CB / FD CB as already handled)
+                            if (!(isDDCB || isFDCB)) {
+                                // IMPORTANT: For IX/IY+offset instructions, process offset FIRST
+                                // This handles keys like 'ld_(ix+offset),imm8' which need both offset AND imm8 bytes
+                                if (key.includes('offset')) {
+                                    // IX/IY displacement - output offset byte before any imm8 data
+                                    const offsetOperand = token.operands.find(o => o.type === 'memory' && typeof o.value === 'string');
+                                    if (offsetOperand) {
+                                        // Extract offset from formats like: IX+5, IY-10, IX+SYMBOL, IX (zero offset)
+                                        const match = offsetOperand.value.match(/(?:IX|IY)\s*([+-])\s*(.+)/i) ||
+                                                      offsetOperand.value.match(/(?:IX|IY)\s*$/i);
+                                        if (match && match[1] && match[2]) {
+                                            // Has explicit offset: IX+5 or IY-SYMBOL
+                                            const sign = match[1] === '-' ? -1 : 1;
+                                            const offsetValue = this.evaluateExpression({type: 'symbol', value: match[2]});
+                                            const signedOffset = sign * offsetValue;
+                                            this.output.push(signedOffset & 0xFF);
+                                        } else {
+                                            // No offset or just IX/IY - use 0
+                                            this.output.push(0);
+                                        }
+                                    }
+                                }
+
+                                // Now handle immediate values (imm16, imm8, rel8)
+                                if (key.includes('imm16')) {
+                                     const operand = token.operands.find(o => o.type === 'symbol' || o.type === 'immediate' || (o.type === 'memory' && (typeof o.value === 'number' || (typeof o.value === 'string' && !['bc','de','hl','sp','c'].includes(o.value.toLowerCase())))));
+                                     if (!operand) throw new Error(`No 16-bit operand found for instruction: ${token.mnemonic}`);
+
+                                     let val;
+                                     let symbolForRelocation = null;
+
+                                     if (operand.type === 'memory') {
+                                         if (typeof operand.value === 'number') {
+                                             val = operand.value;
+                                         } else {
+                                             // Memory operand with symbol - evaluate the symbol inside the parentheses
+                                             symbolForRelocation = {type: 'symbol', value: operand.value};
+                                             val = this.evaluateExpression(symbolForRelocation);
+                                         }
+                                     } else {
+                                         val = this.evaluateExpression(operand);
+                                         if (operand.type === 'symbol') {
+                                             symbolForRelocation = operand;
+                                         }
+                                     }
+
+                                     // Pro version: Track relocation for symbol references
+                                     if (symbolForRelocation && this.needsRelocation(symbolForRelocation)) {
+                                         // In .REL mode, use output buffer position; in binary mode, use PC
+                                         const location = this.outputMode === 'rel' ? this.output.length : (this.pc + opcode.length);
+                                         this.trackRelocation(symbolForRelocation.value, location, true);
+                                     }
+
+                                     this.output.push(val & 0xFF);
+                                     this.output.push((val >> 8) & 0xFF);
+                                } else if (key.includes('imm8')) {
+                                    const operand = token.operands.find(o => {
+                                        if (o.type === 'symbol' || o.type === 'immediate') return true;
+                                        if (o.type === 'memory') {
+                                            if (typeof o.value === 'number') return true;
+                                            if (typeof o.value === 'string') {
+                                                const valLower = o.value.toLowerCase();
+                                                // Exclude register indirect addressing and IX/IY with offset
+                                                if (['bc','de','hl','sp','c','ix','iy'].includes(valLower)) return false;
+                                                // Exclude IX/IY+offset patterns - these are not immediate operands
+                                                if (valLower.includes('ix+') || valLower.includes('ix-') ||
+                                                    valLower.includes('iy+') || valLower.includes('iy-')) return false;
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    });
+                                    if (!operand) throw new Error(`No 8-bit operand found for instruction: ${token.mnemonic}`);
+
+                                    let val;
+                                    if (operand.type === 'memory') {
+                                        if (typeof operand.value === 'number') {
+                                            val = operand.value;
+                                        } else {
+                                            // Memory operand with symbol - evaluate the symbol inside the parentheses
+                                            val = this.evaluateExpression({type: 'symbol', value: operand.value});
+                                        }
+                                    } else {
+                                        val = this.evaluateExpression(operand);
+                                    }
+                                    this.output.push(val & 0xFF);
+                                } else if (key.includes('rel8')) {
+                                    const operand = token.operands.find(o => o.type === 'symbol' || o.type === 'immediate');
+                                    const targetAddr = this.evaluateExpression(operand);
+                                    // Calculate current address: PC + instruction size (opcode bytes + 1 displacement byte)
+                                    const instrSize = opcode.length + 1;
+
+                                    // Pro version: In .REL mode, use output buffer position for relative jumps
+                                    // In binary mode, use absolute PC
+                                    let currentAddr, adjustedTargetAddr;
+                                    if (this.outputMode === 'rel') {
+                                        // Use output buffer positions (0-based)
+                                        currentAddr = this.output.length + instrSize;
+                                        // Target is also relative to segment start
+                                        adjustedTargetAddr = targetAddr - (this.firstOrg || 0);
+                                    } else {
+                                        // Binary mode: use absolute addresses
+                                        currentAddr = this.pc + instrSize;
+                                        adjustedTargetAddr = targetAddr;
+                                    }
+
+                                    // log(`DEBUG DJNZ: mnemonic=${token.mnemonic}, PC=${this.pc}, instrSize=${instrSize}, currentAddr=${currentAddr}, targetAddr=${targetAddr}, adjustedTargetAddr=${adjustedTargetAddr}`, 'debug');
+                                    let offset = adjustedTargetAddr - currentAddr;
+                                    if (offset < -128 || offset > 127) throw new Error(`Relative jump out of range for ${token.mnemonic}: offset ${offset} (target: ${adjustedTargetAddr}, current: ${currentAddr})`);
+                                    if (offset < 0) offset += 256;
+                                    this.output.push(offset);
                                 }
                             }
                         }
@@ -6429,7 +6644,12 @@
                                 if (dest.type === 'register_pair') return 'imm16';
                                 if (dest.type === 'memory') {
                                     if (typeof dest.value === 'string') {
-                                        if (!['bc','de','hl','ix','iy'].includes(dest.value.toLowerCase())) return 'imm16';
+                                        const destLower = dest.value.toLowerCase();
+                                        // Check for register indirect or IX/IY with displacement
+                                        const isRegisterIndirect = ['bc','de','hl','ix','iy'].includes(destLower);
+                                        const isIxIyDisplacement = destLower.includes('ix+') || destLower.includes('ix-') ||
+                                                                   destLower.includes('iy+') || destLower.includes('iy-');
+                                        if (!isRegisterIndirect && !isIxIyDisplacement) return 'imm16';
                                     } else {
                                         return 'imm16'; // Numeric memory operand
                                     }
