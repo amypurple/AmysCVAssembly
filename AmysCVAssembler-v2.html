@@ -1396,6 +1396,24 @@
                     replacement: (line) => line.replace(/\.?section\s+virtual/i, 'SECTION BSS'),
                     explanation: 'SECTION VIRTUAL is obsolete. Use SECTION BSS instead.',
                     savings: 'Better compatibility'
+                },
+                {
+                    name: 'EX HL,DE wrong operand order',
+                    category: 'warnings',
+                    detect: (line) => /^\s*(ex|EX)\s+(hl|HL)\s*,\s*(de|DE)\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'ex de,hl',
+                    replacement: (line) => line.replace(/\b(ex|EX)\s+(hl|HL)\s*,\s*(de|DE)\b/i, 'ex de,hl'),
+                    explanation: 'The correct Z80 syntax is EX DE,HL (opcode EB). EX HL,DE is a common mistake but not standard.',
+                    savings: 'Correct syntax'
+                },
+                {
+                    name: 'EX (SP),HL wrong operand order',
+                    category: 'warnings',
+                    detect: (line) => /^\s*(ex|EX)\s+(hl|HL)\s*,\s*\(\s*(sp|SP)\s*\)\s*(?:;.*)?$/i.test(line),
+                    suggestion: 'ex (sp),hl',
+                    replacement: (line) => line.replace(/\b(ex|EX)\s+(hl|HL)\s*,\s*\(\s*(sp|SP)\s*\)\b/i, 'ex (sp),hl'),
+                    explanation: 'The correct Z80 syntax is EX (SP),HL (opcode E3). The memory operand comes first.',
+                    savings: 'Correct syntax'
                 }
             ],
             formatting: []
@@ -2689,14 +2707,22 @@
                         continue;
                     }
                     
-                    // Check for registers
-                    if (/^(A|B|C|D|E|H|L|I|R|IXH|IXL|IYH|IYL)$/i.test(part)) {
-                        operands.push(new Operand('register', part.toUpperCase()));
+                    // Check for registers (including shadow register notation A', B', etc.)
+                    // Shadow registers are documentation-only - they compile to same opcodes as normal registers
+                    // Use after EXX or EX AF,AF' to indicate you're working with alternate bank
+                    if (/^(A|B|C|D|E|H|L|I|R|IXH|IXL|IYH|IYL)(\')?$/i.test(part)) {
+                        // Strip the ' suffix - shadow registers compile to same opcode
+                        const regName = part.replace(/'$/, '').toUpperCase();
+                        operands.push(new Operand('register', regName));
                         continue;
                     }
-                    
-                    if (/^(AF|BC|DE|HL|SP|IX|IY|AF\')$/i.test(part)) {
-                        operands.push(new Operand('register_pair', part.toUpperCase()));
+
+                    // Register pairs (including shadow notation BC', DE', HL')
+                    if (/^(AF|BC|DE|HL|SP|IX|IY)(\')?$/i.test(part)) {
+                        // Strip the ' suffix - shadow registers compile to same opcode
+                        // Exception: AF' is kept as-is for EX AF,AF' instruction
+                        const pairName = part.toUpperCase();
+                        operands.push(new Operand('register_pair', pairName));
                         continue;
                     }
                     
@@ -4757,10 +4783,12 @@
                 const opTypes = instruction.operands.map(op => {
                     switch(op.type) {
                         case 'register': return op.value.toLowerCase();
-                        case 'register_pair': 
-                            // Handle AF' correctly
+                        case 'register_pair':
+                            // Handle AF' correctly for EX AF,AF'
                             if (op.value.toUpperCase() === "AF'") return "af'";
-                            return op.value.toLowerCase();
+                            // Strip ' suffix from shadow register pairs (BC', DE', HL')
+                            // These compile to the same opcodes as normal registers
+                            return op.value.replace(/'$/, '').toLowerCase();
                         case 'condition': return op.value.toLowerCase();
                         case 'memory': 
                             // Handle memory operands - check if it's a known register or immediate address
