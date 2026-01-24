@@ -544,6 +544,10 @@
     </div>
 
     <script>
+        // AmysCVAssembler version
+        const ASSEMBLER_VERSION = "2.1.0";
+        const ASSEMBLER_EDITION = "Pro";
+
         // Configuration: Set to true to enable debug logging
         const DEBUG_MODE = false;
 
@@ -1347,7 +1351,7 @@
 
         // --- Optimization Assistant ---
         // Known Z80 directives and opcodes for formatting (prefixed with FMT_ to avoid conflict with assembler's Z80_OPCODES)
-        const FMT_DIRECTIVES = ['CPU', 'FNAME', 'EQU', 'SET', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
+        const FMT_DIRECTIVES = ['CPU', 'FNAME', 'EQU', 'SET', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT', 'PRINT', 'FAIL', 'STOP', 'LET', 'REPEAT', 'REND', 'WHILE', 'WEND', 'ENDW', 'SWITCH', 'CASE', 'DEFAULT', 'ENDSWITCH'];
         const FMT_OPCODES = ['ADD', 'ADC', 'SUB', 'SBC', 'AND', 'OR', 'XOR', 'CP', 'INC', 'DEC', 'LD', 'PUSH', 'POP', 'EX', 'EXX', 'JP', 'JR', 'CALL', 'RET', 'RETI', 'RETN', 'RST', 'DJNZ', 'NOP', 'HALT', 'DI', 'EI', 'IM', 'NEG', 'CPL', 'SCF', 'CCF', 'DAA', 'RLA', 'RRA', 'RLCA', 'RRCA', 'RLD', 'RRD', 'LDI', 'LDIR', 'LDD', 'LDDR', 'CPI', 'CPIR', 'CPD', 'CPDR', 'IN', 'OUT', 'INI', 'IND', 'OUTI', 'OUTD', 'RLC', 'RRC', 'RL', 'RR', 'SLA', 'SRA', 'SLL', 'SRL', 'BIT', 'RES', 'SET'];
         const FMT_REGISTERS = ['A', 'B', 'C', 'D', 'E', 'H', 'L', 'I', 'R', 'AF', 'BC', 'DE', 'HL', 'SP', 'IX', 'IY', "AF'", 'IXH', 'IXL', 'IYH', 'IYL'];
         const FMT_CONDITIONS = ['NZ', 'Z', 'NC', 'C', 'PO', 'PE', 'P', 'M'];
@@ -3269,8 +3273,9 @@
 
                 // Try different number formats
                 
-                // Motorola/Intel: $hex
-                if (str.startsWith('$')) {
+                // Motorola/Intel: $hex (must have at least one hex digit after $)
+                // Note: $ alone means "current PC" and should be treated as a symbol, not a number
+                if (str.startsWith('$') && str.length > 1 && /^[0-9a-fA-F]+$/.test(str.substring(1))) {
                     return parseInt(str.substring(1), 16);
                 }
                 
@@ -3345,7 +3350,7 @@
                 this.code = code;
                 this.tokens = [];
                 this.numberParser = new NumberParser();
-                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT'];
+                this.directives = ['CPU', 'FNAME', 'EQU', 'EVAL', 'CONSTANT', 'ORG', 'DW', 'DEFW', 'WORD', 'DS', 'DEFS', 'BLOCK', 'DB', 'DEFB', 'DEFM', 'ASCII', 'TEXT', 'BYTE', 'INCLUDE', 'INCBIN', 'MACRO', 'ENDM', 'REPT', 'ENDR', 'IF', 'IFDEF', 'IFNDEF', 'ENDIF', 'ELSE', 'ELIF', 'COND', 'ENDC', 'SECTION', 'ENDSECTION', 'RADIX', 'INTSYNTAX', 'RELAXED', 'PADDING', 'END', 'PUBLIC', 'GLOBAL', 'GLOBL', 'ENTRY', 'EXTERN', 'EXT', 'EXTRN', 'CSEG', 'DSEG', 'ASEG', 'COMMON', 'AREA', 'MODULE', 'TIMES', 'ALIGN', 'ASSERT', 'STRUCT', 'ENDSTRUCT', 'PRINT', 'FAIL', 'STOP', 'LET', 'REPEAT', 'REND', 'WHILE', 'WEND', 'ENDW', 'SWITCH', 'CASE', 'DEFAULT', 'ENDSWITCH'];
                 this.tempSymbolCounters = {
                     named: 0,
                     plus: 0,
@@ -4473,6 +4478,9 @@
                 this.errorCount = 0;     // Track errors for listing
                 this.lineToAddressMap = new Map(); // Map source line numbers to assembled addresses
                 this.breakpointsToInject = new Set(); // Breakpoints to inject as ld b,b (0x40)
+                // v2.1: LET variables and STOP flag
+                this.variableTable = {}; // Mutable variables (LET directive)
+                this.stopRequested = false; // STOP directive flag
 
                 // Pro version: Segment management for .REL output
                 this.outputMode = 'binary'; // 'binary' or 'rel'
@@ -4626,6 +4634,10 @@
                         this.symbolInfo = {};
                         this.fileMap = [];
                         this.pc = 0;
+                        this.firstOrg = null;  // Reset firstOrg for symbol table rebuild
+                        this.sectionPCs = { CODE: 0, DATA: 0, BSS: 0 };  // Reset section PCs
+                        this.currentSection = 'CODE';  // Reset to CODE section
+                        this.lastNonTempSymbol = '';  // Reset for local label resolution
                         this.buildSymbolTable(tokens);
 
                         // Update optimizer's symbol table reference
@@ -4655,13 +4667,18 @@
                             this.symbolInfo = {};
                             this.fileMap = [];
                             this.pc = 0;
+                            this.firstOrg = null;  // Reset firstOrg for symbol table rebuild
+                            this.sectionPCs = { CODE: 0, DATA: 0, BSS: 0 };  // Reset section PCs
+                            this.currentSection = 'CODE';  // Reset to CODE section
+                            this.lastNonTempSymbol = '';  // Reset for local label resolution
                             this.buildSymbolTable(tokens);
 
                             // Update optimizer's symbol table reference
                             optimizer.symbolTable = this.symbolTable;
 
                             iteration++;
-                        } while (optimizer.stats.jpToJr > previousJpToJr && iteration < maxIterations);
+                            log(`  Iteration ${iteration}: ${optimizer.stats.jpToJr} JP→JR conversions`, 'debug');
+                        } while (optimizer.stats.jpToJr > 0 && optimizer.stats.jpToJr !== previousJpToJr && iteration < maxIterations);
 
                         // Show address shifts for labels that moved
                         log(`Address mapping (labels that moved):`, 'debug');
@@ -4781,7 +4798,7 @@
                         
                         log(
                             `Assembly successful! Raw binary: ${compiledBinary.length} bytes | ` +
-                            `Range: ${(this.firstOrg ?? 0).toString(16).toUpperCase()}-${(src.length-1).toString(16).toUpperCase()}`,
+                            `Range: ${(this.firstOrg ?? 0).toString(16).toUpperCase()}-${((this.firstOrg ?? 0) + compiledBinary.length - 1).toString(16).toUpperCase()}`,
                             'success'
                         );
                     }
@@ -4818,6 +4835,9 @@
 
                 // Pre-collect EQU constants for TIMES directive (Pass 1 needs them)
                 if (!this.constantTable) this.constantTable = {};
+                // Also pre-collect LET variables
+                if (!this.variableTable) this.variableTable = {};
+
                 for (let i = 0; i < lines.length; i++) {
                     const trimmed = lines[i].trim();
                     if (!trimmed || trimmed.startsWith(';')) continue;
@@ -4839,10 +4859,54 @@
                             // Skip constants that can't be evaluated yet
                         }
                     }
+                    // Note: LET variables are collected in the block-aware loop below (lines 3504+)
                 }
 
-                for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-                    const line = lines[lineIdx];
+                // ============================================
+                // v2.1 PRE-PROCESS: LET variables, REPEAT/ENDR, WHILE/WEND, SWITCH/CASE
+                // ============================================
+                // First pass: Pre-process LET directives so variables are available during block expansion
+                // BUT skip LET lines inside REPEAT/WHILE blocks - those are handled during expansion
+                let blockDepth = 0;
+                for (const line of lines) {
+                    const upperTrimmed = line.trim().toUpperCase();
+                    // Track block nesting
+                    if (upperTrimmed.startsWith('REPEAT ') || upperTrimmed === 'REPEAT' ||
+                        upperTrimmed.startsWith('WHILE ')) {
+                        blockDepth++;
+                    }
+                    if (upperTrimmed === 'REND' || upperTrimmed === 'ENDR' ||
+                        upperTrimmed.startsWith('REND ') || upperTrimmed.startsWith('ENDR ') ||
+                        upperTrimmed === 'WEND' || upperTrimmed === 'ENDW' ||
+                        upperTrimmed.startsWith('WEND ') || upperTrimmed.startsWith('ENDW ')) {
+                        blockDepth--;
+                    }
+                    // Only process LET lines that are NOT inside a loop block
+                    // AND only for FIRST assignment (initialization), not updates
+                    if (blockDepth === 0) {
+                        const letMatch = line.trim().match(/^LET\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$/i);
+                        if (letMatch) {
+                            const varName = letMatch[1];
+                            // Only pre-process if variable not already defined (initial assignment)
+                            // This allows ASSERT to check values before later LET updates
+                            if (this.variableTable[varName] === undefined) {
+                                const varExpr = letMatch[2].trim().replace(/;.*$/, '').trim();
+                                try {
+                                    this.variableTable[varName] = this.evaluateExpressionSimple(varExpr);
+                                } catch (e) {
+                                    // Variable might depend on others defined later, continue
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let processedLines = this.expandRepeatBlocks(lines);
+                processedLines = this.expandWhileBlocks(processedLines);
+                processedLines = this.expandSwitchBlocks(processedLines);
+
+                for (let lineIdx = 0; lineIdx < processedLines.length; lineIdx++) {
+                    const line = processedLines[lineIdx];
                     const trimmed = line.trim();
                     const parts = trimmed.split(/\s+/);
                     let mnemonic = parts.length > 0 ? parts[0].toLowerCase() : '';
@@ -5124,6 +5188,279 @@
                 return conditionalStack.length === 0 || conditionalStack.every(c => c.condition);
             }
 
+            // ============================================
+            // v2.1 REPEAT/ENDR Block Expansion
+            // ============================================
+            expandRepeatBlocks(lines) {
+                const MAX_ITERATIONS = 65536;
+                let result = [];
+                let i = 0;
+
+                while (i < lines.length) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    const upperTrimmed = trimmed.toUpperCase();
+
+                    // Check for REPEAT directive
+                    if (upperTrimmed.startsWith('REPEAT ') || upperTrimmed === 'REPEAT') {
+                        // Parse: REPEAT count [, counterVar]
+                        const afterRepeat = trimmed.substring(6).trim();
+                        let countExpr, counterVar = null;
+
+                        // Check for counter variable: REPEAT count, varName
+                        const commaIdx = afterRepeat.indexOf(',');
+                        if (commaIdx > 0) {
+                            countExpr = afterRepeat.substring(0, commaIdx).trim();
+                            counterVar = afterRepeat.substring(commaIdx + 1).trim().replace(/;.*$/, '').trim();
+                        } else {
+                            countExpr = afterRepeat.replace(/;.*$/, '').trim();
+                        }
+
+                        let count = 0;
+                        try {
+                            count = Math.floor(this.evaluateExpressionSimple(countExpr));
+                        } catch (e) {
+                            throw new Error(`REPEAT at line ${i + 1}: Cannot evaluate count '${countExpr}' - ${e.message}`);
+                        }
+
+                        if (count < 0 || count > MAX_ITERATIONS) {
+                            throw new Error(`REPEAT at line ${i + 1}: Invalid count ${count} (must be 0-${MAX_ITERATIONS})`);
+                        }
+
+                        // Find matching REND/ENDR (handle nesting)
+                        let depth = 1;
+                        let endIdx = i + 1;
+                        while (depth > 0 && endIdx < lines.length) {
+                            const checkLine = lines[endIdx].trim().toUpperCase();
+                            if (checkLine.startsWith('REPEAT ') || checkLine === 'REPEAT') depth++;
+                            if (checkLine === 'REND' || checkLine === 'ENDR' ||
+                                checkLine.startsWith('REND ') || checkLine.startsWith('ENDR ')) depth--;
+                            endIdx++;
+                        }
+                        endIdx--; // Point to REND/ENDR
+
+                        if (depth !== 0) {
+                            throw new Error(`REPEAT at line ${i + 1}: Missing REND/ENDR`);
+                        }
+
+                        // Extract body lines
+                        const bodyLines = lines.slice(i + 1, endIdx);
+
+                        // Expand the body 'count' times
+                        result.push(`; === REPEAT ${count}${counterVar ? ', ' + counterVar : ''} ===`);
+                        for (let iter = 0; iter < count; iter++) {
+                            // Replace counter variable if specified
+                            for (const bodyLine of bodyLines) {
+                                let processedLine = bodyLine;
+
+                                // Replace counter variable with current iteration value
+                                if (counterVar) {
+                                    const regex = new RegExp(`\\b${counterVar}\\b`, 'g');
+                                    processedLine = processedLine.replace(regex, iter.toString());
+                                }
+
+                                // Process LET directives to update variables during expansion
+                                const letMatch = processedLine.trim().match(/^LET\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$/i);
+                                if (letMatch) {
+                                    const varName = letMatch[1];
+                                    const varExpr = letMatch[2].trim().replace(/;.*$/, '').trim();
+                                    try {
+                                        this.variableTable[varName] = this.evaluateExpressionSimple(varExpr);
+                                    } catch (e) {
+                                        // Continue anyway, might be evaluated later
+                                    }
+                                    // Don't substitute variables in LET lines - they're processed for variable table only
+                                    // Skip outputting LET lines since the variable is now in variableTable
+                                    continue;
+                                }
+
+                                // Replace variables in the line with their current values
+                                if (this.variableTable) {
+                                    for (const [varName, varValue] of Object.entries(this.variableTable)) {
+                                        const varRegex = new RegExp(`\\b${varName}\\b`, 'g');
+                                        processedLine = processedLine.replace(varRegex, varValue.toString());
+                                    }
+                                }
+
+                                result.push(processedLine);
+                            }
+                        }
+                        result.push(`; === END REPEAT ===`);
+
+                        i = endIdx + 1; // Skip past REND/ENDR
+                    } else {
+                        result.push(line);
+                        i++;
+                    }
+                }
+
+                // Recursively expand nested REPEATs that were inside outer REPEATs
+                if (result.some(l => l.trim().toUpperCase().startsWith('REPEAT '))) {
+                    return this.expandRepeatBlocks(result);
+                }
+
+                return result;
+            }
+
+            // ============================================
+            // v2.1 WHILE/WEND Block Expansion
+            // ============================================
+            expandWhileBlocks(lines) {
+                const MAX_ITERATIONS = 10000;
+                let result = [];
+                let i = 0;
+
+                while (i < lines.length) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    const upperTrimmed = trimmed.toUpperCase();
+
+                    // Check for WHILE directive
+                    if (upperTrimmed.startsWith('WHILE ')) {
+                        // Parse: WHILE condition
+                        const condition = trimmed.substring(5).trim().replace(/;.*$/, '').trim();
+
+                        // Find matching WEND/ENDW (handle nesting)
+                        let depth = 1;
+                        let endIdx = i + 1;
+                        while (depth > 0 && endIdx < lines.length) {
+                            const checkLine = lines[endIdx].trim().toUpperCase();
+                            if (checkLine.startsWith('WHILE ')) depth++;
+                            if (checkLine === 'WEND' || checkLine === 'ENDW' || checkLine === 'WENDM' ||
+                                checkLine.startsWith('WEND ') || checkLine.startsWith('ENDW ')) depth--;
+                            endIdx++;
+                        }
+                        endIdx--; // Point to WEND
+
+                        if (depth !== 0) {
+                            throw new Error(`WHILE at line ${i + 1}: Missing WEND/ENDW`);
+                        }
+
+                        // Extract body lines
+                        const bodyLines = lines.slice(i + 1, endIdx);
+
+                        // Expand while condition is true
+                        result.push(`; === WHILE ${condition} ===`);
+                        let iterations = 0;
+
+                        while (this.evaluateCondition(condition) && iterations < MAX_ITERATIONS) {
+                            for (const bodyLine of bodyLines) {
+                                // Process LET directives to update variables during expansion
+                                const letMatch = bodyLine.trim().match(/^LET\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$/i) ||
+                                                 bodyLine.trim().match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+LET\s+(.+)$/i);
+                                if (letMatch) {
+                                    const varName = letMatch[1];
+                                    const varExpr = letMatch[2].trim().replace(/;.*$/, '').trim();
+                                    try {
+                                        this.variableTable[varName] = this.evaluateExpressionSimple(varExpr);
+                                    } catch (e) {
+                                        // Continue anyway, might be evaluated later
+                                    }
+                                    // Don't output LET lines - they're processed for variable table only
+                                    continue;
+                                }
+
+                                // Replace variables in the line with their current values
+                                let processedLine = bodyLine;
+                                if (this.variableTable) {
+                                    for (const [varName, varValue] of Object.entries(this.variableTable)) {
+                                        const varRegex = new RegExp(`\\b${varName}\\b`, 'g');
+                                        processedLine = processedLine.replace(varRegex, varValue.toString());
+                                    }
+                                }
+                                result.push(processedLine);
+                            }
+                            iterations++;
+                        }
+
+                        if (iterations >= MAX_ITERATIONS) {
+                            throw new Error(`WHILE at line ${i + 1}: Exceeded ${MAX_ITERATIONS} iterations (infinite loop?)`);
+                        }
+
+                        result.push(`; === END WHILE (${iterations} iterations) ===`);
+                        i = endIdx + 1; // Skip past WEND
+                    } else {
+                        result.push(line);
+                        i++;
+                    }
+                }
+
+                return result;
+            }
+
+            // ============================================
+            // v2.1 SWITCH/CASE Block Expansion
+            // ============================================
+            expandSwitchBlocks(lines) {
+                let result = [];
+                let i = 0;
+
+                while (i < lines.length) {
+                    const line = lines[i];
+                    const trimmed = line.trim();
+                    const upperTrimmed = trimmed.toUpperCase();
+
+                    // Check for SWITCH directive
+                    if (upperTrimmed.startsWith('SWITCH ')) {
+                        // Parse: SWITCH expression
+                        const switchExpr = trimmed.substring(6).trim().replace(/;.*$/, '').trim();
+
+                        // Find matching ENDSWITCH (handle nesting)
+                        let depth = 1;
+                        let endIdx = i + 1;
+                        while (depth > 0 && endIdx < lines.length) {
+                            const checkLine = lines[endIdx].trim().toUpperCase();
+                            if (checkLine.startsWith('SWITCH ')) depth++;
+                            if (checkLine === 'ENDSWITCH' || checkLine === 'ENDS' ||
+                                checkLine.startsWith('ENDSWITCH ')) depth--;
+                            endIdx++;
+                        }
+                        endIdx--; // Point to ENDSWITCH
+
+                        if (depth !== 0) {
+                            throw new Error(`SWITCH at line ${i + 1}: Missing ENDSWITCH`);
+                        }
+
+                        // Convert SWITCH/CASE to IF/ELIF/ELSE
+                        result.push(`; === SWITCH ${switchExpr} ===`);
+                        let isFirst = true;
+                        let j = i + 1;
+
+                        while (j < endIdx) {
+                            const caseLine = lines[j].trim();
+                            const caseUpper = caseLine.toUpperCase();
+
+                            if (caseUpper.startsWith('CASE ')) {
+                                // Extract case value
+                                const caseValue = caseLine.substring(4).trim().replace(/;.*$/, '').trim();
+                                if (isFirst) {
+                                    result.push(`IF ${switchExpr} == ${caseValue}`);
+                                    isFirst = false;
+                                } else {
+                                    result.push(`ELIF ${switchExpr} == ${caseValue}`);
+                                }
+                            } else if (caseUpper === 'DEFAULT' || caseUpper.startsWith('DEFAULT ')) {
+                                result.push(`ELSE`);
+                            } else if (caseUpper === 'BREAK' || caseUpper.startsWith('BREAK ')) {
+                                // BREAK is implicit in IF/ELIF structure - skip it
+                            } else {
+                                result.push(lines[j]);
+                            }
+                            j++;
+                        }
+
+                        result.push(`ENDIF`);
+                        result.push(`; === END SWITCH ===`);
+                        i = endIdx + 1; // Skip past ENDSWITCH
+                    } else {
+                        result.push(line);
+                        i++;
+                    }
+                }
+
+                return result;
+            }
+
             evaluateCondition(expr) {
                 try {
                     // Simple condition evaluation
@@ -5132,8 +5469,18 @@
 
                     // Handle defined() function
                     evalExpr = evalExpr.replace(/defined\s*\(\s*([^)]+)\s*\)/g, (match, symbol) => {
-                        return (this.constantTable[symbol] !== undefined || this.symbolTable[symbol] !== undefined) ? '1' : '0';
+                        return (this.constantTable[symbol] !== undefined ||
+                                this.symbolTable[symbol] !== undefined ||
+                                (this.variableTable && this.variableTable[symbol] !== undefined)) ? '1' : '0';
                     });
+
+                    // Replace variables first (v2.1 LET)
+                    if (this.variableTable) {
+                        for (const [symbol, value] of Object.entries(this.variableTable)) {
+                            const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                            evalExpr = evalExpr.replace(regex, value);
+                        }
+                    }
 
                     // Replace symbols with their constant values
                     for (const [symbol, value] of Object.entries(this.constantTable)) {
@@ -5161,6 +5508,14 @@
                 try {
                     let evalExpr = expr.trim();
 
+                    // Replace variables from variableTable first (v2.1 LET)
+                    if (this.variableTable) {
+                        for (const [symbol, value] of Object.entries(this.variableTable)) {
+                            const regex = new RegExp(`\\b${symbol}\\b`, 'g');
+                            evalExpr = evalExpr.replace(regex, value);
+                        }
+                    }
+
                     // Replace hex numbers ($FF or 0xFF format)
                     evalExpr = evalExpr.replace(/\$([0-9a-fA-F]+)/g, (match, hex) => {
                         return '0x' + hex;
@@ -5174,10 +5529,73 @@
                         return parseInt(bin, 2).toString();
                     });
 
+                    // Parse octal (@377)
+                    evalExpr = evalExpr.replace(/@([0-7]+)/g, (match, oct) => parseInt(oct, 8));
+
                     // Replace constants from constantTable
                     for (const [symbol, value] of Object.entries(this.constantTable)) {
                         const regex = new RegExp(`\\b${symbol}\\b`, 'g');
                         evalExpr = evalExpr.replace(regex, value);
+                    }
+
+                    // ============================================
+                    // v2.1 MATH FUNCTIONS - Process iteratively to handle nesting
+                    // ============================================
+                    const DEG_TO_RAD = Math.PI / 180;
+                    const RAD_TO_DEG = 180 / Math.PI;
+
+                    // Helper to evaluate inner expression with nesting support
+                    const evalInner = (inner) => {
+                        try {
+                            return new Function(`return ${inner}`)();
+                        } catch (e) {
+                            return parseFloat(inner);
+                        }
+                    };
+
+                    // Process functions iteratively until no more changes
+                    let prevExpr = '';
+                    let maxIter = 20;
+                    while (evalExpr !== prevExpr && maxIter-- > 0) {
+                        prevExpr = evalExpr;
+
+                        // Trig functions first (often innermost)
+                        evalExpr = evalExpr.replace(/\bSIN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sin(evalInner(a) * DEG_TO_RAD));
+                        evalExpr = evalExpr.replace(/\bCOS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.cos(evalInner(a) * DEG_TO_RAD));
+                        evalExpr = evalExpr.replace(/\bTAN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.tan(evalInner(a) * DEG_TO_RAD));
+                        evalExpr = evalExpr.replace(/\bASIN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.asin(evalInner(a)) * RAD_TO_DEG);
+                        evalExpr = evalExpr.replace(/\bACOS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.acos(evalInner(a)) * RAD_TO_DEG);
+                        evalExpr = evalExpr.replace(/\bATAN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.atan(evalInner(a)) * RAD_TO_DEG);
+
+                        // Log/Exp functions
+                        evalExpr = evalExpr.replace(/\bLOG10\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log10(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bLOG2\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log2(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bLOG\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bEXP\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.exp(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bSQRT\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sqrt(evalInner(a)));
+
+                        // Other single-arg math functions
+                        evalExpr = evalExpr.replace(/\bABS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.abs(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bFLOOR\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.floor(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bCEIL\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.ceil(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bROUND\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.round(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bSGN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sign(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bINT\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.trunc(evalInner(a)));
+                        evalExpr = evalExpr.replace(/\bFRAC\s*\(\s*([^()]+)\s*\)/gi, (m, a) => evalInner(a) % 1);
+
+                        // Two-argument functions
+                        evalExpr = evalExpr.replace(/\bMIN\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.min(evalInner(a), evalInner(b)));
+                        evalExpr = evalExpr.replace(/\bMAX\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.max(evalInner(a), evalInner(b)));
+                        evalExpr = evalExpr.replace(/\bPOW\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.pow(evalInner(a), evalInner(b)));
+                        evalExpr = evalExpr.replace(/\bATAN2\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, y, x) => Math.atan2(evalInner(y), evalInner(x)) * RAD_TO_DEG);
+
+                        // RND - random number
+                        evalExpr = evalExpr.replace(/\bRND\s*\(\s*([^()]+)\s*\)/gi,
+                            (m, a) => Math.floor(Math.random() * evalInner(a)));
                     }
 
                     // Evaluate the expression
@@ -5369,12 +5787,18 @@
                                 const nextToken = i + 1 < tokens.length ? tokens[i + 1] : null;
                                 if (nextToken instanceof Directive && ['DB', 'DW', 'DS', 'DEFB', 'DEFW', 'DEFS'].includes(nextToken.name)) {
                                     symbolCategory = 'data';
-                                } else {
+                                } else if (nextToken instanceof Instruction) {
+                                    // Only CODE if followed by actual instruction
                                     symbolCategory = 'code';
+                                } else {
+                                    // EQU, SECTION, or other directives - keep current section's category
+                                    // In BSS section, treat as data; otherwise as code
+                                    symbolCategory = inBSSSection ? 'data' : 'code';
                                 }
                             }
 
-                            // CRITICAL: If we encounter a CODE label while in BSS section, implicitly return to CODE
+                            // CRITICAL: If we encounter a CODE label (followed by instruction) while in BSS section, implicitly return to CODE
+                            // Only trigger for labels that are actually followed by instructions
                             if (inBSSSection && symbolCategory === 'code') {
                                 const oldPC = this.pc;
                                 inBSSSection = false;
@@ -5627,6 +6051,7 @@
 
                                     const incbinStartAddr = this.pc;
                                     this.pc += incbinRead;
+                                    if (!inBSSSection) romPC += incbinRead;
 
                                     // Track binary file inclusion with range info
                                     this.fileMap.push({
@@ -5655,20 +6080,29 @@
                                         // Save current section's PC before switching
                                         this.sectionPCs[this.currentSection] = this.pc;
 
+                                        // Track if we're leaving BSS section
+                                        const wasInBSS = inBSSSection;
+
                                         // Switch to new section
                                         this.currentSection = sectionName;
+                                        inBSSSection = (sectionName === 'BSS');
 
                                         // If this section hasn't been used yet (PC still at initial ORG),
                                         // continue from current position instead of jumping back
                                         if (this.sectionPCs[sectionName] === this.firstOrg && sectionName !== 'CODE') {
                                             this.sectionPCs[sectionName] = this.pc;
                                         }
-                                        this.pc = this.sectionPCs[sectionName];
-                                        inBSSSection = (sectionName === 'BSS');
 
-                                        if (this.currentPass === 1) {
-                                            log(`Switched to ${this.currentSection} section`, 'info');
+                                        // When returning to CODE from BSS, calculate PC from romPC
+                                        // (BSS doesn't contribute to ROM, so CODE continues from where it left off in ROM)
+                                        if (wasInBSS && sectionName === 'CODE') {
+                                            this.pc = (this.firstOrg || 0) + romPC;
+                                            this.sectionPCs['CODE'] = this.pc;
+                                        } else {
+                                            this.pc = this.sectionPCs[sectionName];
                                         }
+
+                                        log(`Switched to ${this.currentSection} section (PC: $${this.pc.toString(16)}, CODE PC: $${this.sectionPCs.CODE.toString(16)}, BSS PC: $${this.sectionPCs.BSS.toString(16)}, romPC: ${romPC})`, 'info');
                                     } else {
                                         throw new Error(`SECTION directive at line ${this.currentLine}: Requires a section name (CODE, DATA, or BSS)`);
                                     }
@@ -5744,6 +6178,95 @@
                                     break;
                                 case 'ENDSTRUCT':
                                     // Structure end - already processed in Pass 1
+                                    break;
+                                // ============================================
+                                // v2.1 DIRECTIVES: PRINT, FAIL, STOP, LET
+                                // ============================================
+                                case 'PRINT':
+                                    // PRINT directive: output messages during assembly
+                                    // Syntax: PRINT "message" | PRINT "text", expr | PRINT {hex} expr
+                                    if (this.currentPass === 2) {
+                                        let printOutput = '';
+                                        let printFormat = 'dec'; // default format
+
+                                        for (const operand of token.operands) {
+                                            const opVal = operand.value;
+                                            // Check for format specifiers (can be string or symbol type)
+                                            if (opVal === '{hex}') { printFormat = 'hex'; continue; }
+                                            if (opVal === '{bin}') { printFormat = 'bin'; continue; }
+                                            if (opVal === '{dec}') { printFormat = 'dec'; continue; }
+
+                                            if (operand.type === 'string') {
+                                                printOutput += opVal;
+                                            } else {
+                                                // Evaluate expression (preserveFloat=true to show fractional values)
+                                                const val = this.evaluateExpression(operand, true);
+                                                switch (printFormat) {
+                                                    case 'hex': printOutput += '$' + Math.floor(val).toString(16).toUpperCase(); break;
+                                                    case 'bin': printOutput += '%' + Math.floor(val).toString(2); break;
+                                                    default: printOutput += val.toString();
+                                                }
+                                            }
+                                        }
+                                        log(`[PRINT] ${printOutput}`, 'info');
+                                    }
+                                    break;
+                                case 'FAIL':
+                                    // FAIL directive: stop assembly with error message
+                                    // Syntax: FAIL "error message" | FAIL
+                                    {
+                                        const failMsg = token.operands.length > 0 && token.operands[0].type === 'string'
+                                            ? token.operands[0].value
+                                            : 'Assembly stopped by FAIL directive';
+                                        throw new Error(`FAIL at line ${this.currentLine}: ${failMsg}`);
+                                    }
+                                case 'STOP':
+                                    // STOP directive: stop assembly without error
+                                    // Syntax: STOP
+                                    log(`Assembly stopped by STOP directive at line ${this.currentLine}`, 'warn');
+                                    this.stopRequested = true;
+                                    return; // Exit buildSymbolTable early
+                                case 'LET':
+                                    // LET directive: define or update mutable variable
+                                    // Syntax: LET name = value | name LET value
+                                    {
+                                        let letLabel, letValue;
+                                        if (token.label) {
+                                            // Format: name LET value
+                                            letLabel = token.label;
+                                            letValue = this.evaluateExpression(token.operands[0]);
+                                        } else if (token.operands.length >= 1) {
+                                            // Format: LET name = value
+                                            // The tokenizer may parse "name = value" as a single symbol operand
+                                            const operandStr = token.operands[0].value || token.operands[0].toString();
+                                            if (typeof operandStr === 'string' && operandStr.includes('=')) {
+                                                // Split on first =
+                                                const eqIndex = operandStr.indexOf('=');
+                                                letLabel = operandStr.substring(0, eqIndex).trim();
+                                                const valueExpr = operandStr.substring(eqIndex + 1).trim();
+                                                letValue = this.evaluateExpressionSimple(valueExpr);
+                                            } else if (token.operands.length >= 2) {
+                                                // Alternative: two operands (name, value)
+                                                letLabel = token.operands[0].value;
+                                                letValue = this.evaluateExpression(token.operands[1]);
+                                            } else {
+                                                throw new Error(`LET directive at line ${this.currentLine}: requires 'name = value' format`);
+                                            }
+                                        } else {
+                                            throw new Error(`LET directive at line ${this.currentLine}: requires name and value`);
+                                        }
+                                        // Store in variableTable (mutable, unlike constantTable)
+                                        this.variableTable[letLabel] = letValue;
+                                        // Also update symbolTable for expression evaluation
+                                        this.symbolTable[letLabel] = letValue;
+                                        this.symbolInfo[letLabel] = {
+                                            address: letValue,
+                                            file: currentSourceFile,
+                                            lineNumber: this.currentLine,
+                                            type: 'variable',
+                                            size: 0
+                                        };
+                                    }
                                     break;
 
                                 // Pro version: Symbol visibility directives
@@ -5914,7 +6437,7 @@
                     output += `Window Free:     ${this.compilationStats.windowFree} bytes\n\n`;
                 } else if (this.compilationStats.rawSize !== undefined) {
                     output += `Raw Binary Size: ${this.compilationStats.rawSize} bytes\n`;
-                    output += `Address Range: ${(this.firstOrg ?? 0).toString(16).toUpperCase()}-${(this.output.length-1).toString(16).toUpperCase()}\n\n`;
+                    output += `Address Range: ${(this.firstOrg ?? 0).toString(16).toUpperCase()}-${((this.firstOrg ?? 0) + this.output.length - 1).toString(16).toUpperCase()}\n\n`;
                 }
                 
                 output += '=== FILE MAP ===\n';
@@ -5947,6 +6470,7 @@
                 this.output = [];
                 this.lastNonTempSymbol = '';  // Reset for Pass 3
                 const shadowRegisterUsages = []; // Track shadow register usage for consolidated warning
+                let inBSSSection = false;  // Track if we're in BSS section (for label fill logic)
 
                 for (const token of tokens) {
                     this.currentInstruction = token;
@@ -5988,8 +6512,9 @@
 
                                 // Pro version: In .REL mode, don't fill with zeros - linker handles placement
                                 // CRITICAL: Output buffer is relative to firstOrg
-                                // Only fill forward to match ROM output. RAM sections don't add to output.
-                                if (this.outputMode !== 'rel' && this.firstOrg !== null) {
+                                // Only fill forward to match ROM output. BSS/RAM sections don't add to output.
+                                // Don't fill when in BSS section - those labels are in RAM, not ROM
+                                if (this.outputMode !== 'rel' && this.firstOrg !== null && !inBSSSection) {
                                     const targetOutputPos = this.pc - this.firstOrg;
                                     // Only fill if PC is ahead of current output AND we're in ROM space (PC >= firstOrg)
                                     if (this.pc >= this.firstOrg && targetOutputPos > this.output.length) {
@@ -6196,6 +6721,11 @@
                                             throw new Error(`SECTION directive at line ${this.currentLine}: Invalid section '${sectionName}'. Valid sections: CODE, DATA, BSS`);
                                         }
 
+                                        // DEBUG: Log section switch
+                                        const oldSection = this.currentSection;
+                                        const oldPC = this.pc;
+                                        const oldOutputLen = this.output.length;
+
                                         // Save current section's PC before switching
                                         this.sectionPCs[this.currentSection] = this.pc;
 
@@ -6208,6 +6738,9 @@
                                             this.sectionPCs[sectionName] = this.pc;
                                         }
                                         this.pc = this.sectionPCs[sectionName];
+
+                                        // Track BSS section state for label fill logic
+                                        inBSSSection = (sectionName === 'BSS');
                                     } else {
                                         throw new Error(`SECTION directive at line ${this.currentLine}: Requires a section name (CODE, DATA, or BSS)`);
                                     }
@@ -6223,16 +6756,9 @@
                                     this.pc += alignPadding_p3;
                                     break;
                                 case 'ASSERT':
-                                    // ASSERT directive: validate condition at compile time (Pass 3)
-                                    const assertCondition_p3 = this.evaluateExpression(token.operands[0]);
-                                    if (!assertCondition_p3) {
-                                        let assertMsg_p3 = 'Assertion failed';
-                                        if (token.operands.length > 1 && token.operands[1].type === 'string') {
-                                            assertMsg_p3 = token.operands[1].value;
-                                        }
-                                        throw new Error(`ASSERT failed at line ${this.currentLine}: ${assertMsg_p3}`);
-                                    }
-                                    // ASSERT passes - no output
+                                    // ASSERT directive: skip in Pass 3
+                                    // Assertions are validated in Pass 2 when LET variables reflect source order
+                                    // By Pass 3, LET variables have final values which would cause false failures
                                     break;
                                 case 'STRUCT':
                                     // Structure instance in Pass 3: reserve space (output zeros)
@@ -6843,9 +7369,18 @@
                 return `${mnemonic}_${opTypes}`;
             }
 
-            evaluateExpression(operand) {
+            evaluateExpression(operand, preserveFloat = false) {
                 try {
                     if (operand.type === 'immediate') return operand.value;
+                    // Check if register/condition name is actually a LET variable
+                    // (e.g., 'c' could be parsed as register C but actually be a variable)
+                    if ((operand.type === 'register' || operand.type === 'condition') && this.variableTable) {
+                        const varName = operand.value.toLowerCase();
+                        if (this.variableTable[varName] !== undefined) {
+                            const result = this.variableTable[varName];
+                            return preserveFloat ? result : Math.floor(result);
+                        }
+                    }
                     if (operand.type !== 'symbol') {
                         if (this.currentPass < 3) return 0;
                         throw new Error(`Cannot evaluate expression for operand type: ${operand.type}`);
@@ -6878,7 +7413,17 @@
                     // Don't replace * - it's the multiplication operator, not PC symbol
                     // (If we need * as PC symbol in the future, we'll need context-aware replacement)
 
-                    // Replace constants first (higher priority than symbols)
+                    // Replace variables first (v2.1 LET - highest priority for mutable values)
+                    if (this.variableTable) {
+                        const sortedVars = Object.keys(this.variableTable).sort((a, b) => b.length - a.length);
+                        for (const varName of sortedVars) {
+                            const escapedVar = varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                            const regex = new RegExp(`\\b${escapedVar}\\b`, 'gi');
+                            parsedExpr = parsedExpr.replace(regex, this.variableTable[varName]);
+                        }
+                    }
+
+                    // Replace constants (higher priority than symbols)
                     const sortedConstants = Object.keys(this.constantTable).sort((a, b) => b.length - a.length);
                     for (const constant of sortedConstants) {
                         // Escape special regex characters in constant name
@@ -6934,6 +7479,66 @@
                             return match; // Leave as-is if can't evaluate yet
                         }
                     });
+
+                    // ============================================
+                    // v2.1 MATH FUNCTIONS - Process iteratively to handle nesting
+                    // ============================================
+                    const DEG_TO_RAD = Math.PI / 180;
+                    const RAD_TO_DEG = 180 / Math.PI;
+
+                    // Helper to evaluate inner expression with nesting support
+                    const evalInner = (inner) => {
+                        try {
+                            return new Function(`return ${inner}`)();
+                        } catch (e) {
+                            return parseFloat(inner);
+                        }
+                    };
+
+                    // Process functions iteratively until no more changes
+                    let prevParsedExpr = '';
+                    let maxIterations = 20;
+                    while (parsedExpr !== prevParsedExpr && maxIterations-- > 0) {
+                        prevParsedExpr = parsedExpr;
+
+                        // Trig functions first (often innermost)
+                        parsedExpr = parsedExpr.replace(/\bSIN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sin(evalInner(a) * DEG_TO_RAD));
+                        parsedExpr = parsedExpr.replace(/\bCOS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.cos(evalInner(a) * DEG_TO_RAD));
+                        parsedExpr = parsedExpr.replace(/\bTAN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.tan(evalInner(a) * DEG_TO_RAD));
+                        parsedExpr = parsedExpr.replace(/\bASIN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.asin(evalInner(a)) * RAD_TO_DEG);
+                        parsedExpr = parsedExpr.replace(/\bACOS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.acos(evalInner(a)) * RAD_TO_DEG);
+                        parsedExpr = parsedExpr.replace(/\bATAN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.atan(evalInner(a)) * RAD_TO_DEG);
+
+                        // Log/Exp functions
+                        parsedExpr = parsedExpr.replace(/\bLOG10\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log10(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bLOG2\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log2(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bLOG\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.log(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bEXP\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.exp(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bSQRT\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sqrt(evalInner(a)));
+
+                        // Other single-arg math functions
+                        parsedExpr = parsedExpr.replace(/\bABS\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.abs(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bFLOOR\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.floor(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bCEIL\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.ceil(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bROUND\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.round(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bSGN\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.sign(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bINT\s*\(\s*([^()]+)\s*\)/gi, (m, a) => Math.trunc(evalInner(a)));
+                        parsedExpr = parsedExpr.replace(/\bFRAC\s*\(\s*([^()]+)\s*\)/gi, (m, a) => evalInner(a) % 1);
+
+                        // Two-argument functions
+                        parsedExpr = parsedExpr.replace(/\bMIN\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.min(evalInner(a), evalInner(b)));
+                        parsedExpr = parsedExpr.replace(/\bMAX\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.max(evalInner(a), evalInner(b)));
+                        parsedExpr = parsedExpr.replace(/\bPOW\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, a, b) => Math.pow(evalInner(a), evalInner(b)));
+                        parsedExpr = parsedExpr.replace(/\bATAN2\s*\(\s*([^(),]+)\s*,\s*([^()]+)\s*\)/gi,
+                            (m, y, x) => Math.atan2(evalInner(y), evalInner(x)) * RAD_TO_DEG);
+
+                        // RND - random number
+                        parsedExpr = parsedExpr.replace(/\bRND\s*\(\s*([^()]+)\s*\)/gi,
+                            (m, a) => Math.floor(Math.random() * evalInner(a)));
+                    }
 
                     // Handle > operator (high byte) - must be at start or after non-letter
                     // >$1234 -> high byte of 0x1234
@@ -6993,7 +7598,8 @@
                              if (this.currentPass < 3) return 0;
                              throw new Error(`Invalid characters in expression: ${originalExpr} (cleaned: ${sanitizedExpr})`);
                         }
-                        return Math.floor(new Function(`return ${sanitizedExpr}`)());
+                        const result = new Function(`return ${sanitizedExpr}`)();
+                        return preserveFloat ? result : Math.floor(result);
                     } catch (e) {
                         if (this.currentPass < 3) return 0;
                         throw new Error(`Invalid expression: ${originalExpr} (sanitized: ${expr})`);
@@ -8060,28 +8666,22 @@
 
                     // === PHASE 1.3: INC/DEC Cancellation ===
                     // INC r followed by DEC r → remove both
-                    if (['inc', 'dec'].includes(mnem) && i + 1 < tokens.length) {
+                    if (['inc', 'dec'].includes(mnem) && i + 1 < tokens.length && token.operands.length === 1) {
                         const next = tokens[i + 1];
-
-                        if (next instanceof Instruction) {
+                        if (next instanceof Instruction && next.operands.length === 1) {
                             const nextMnem = next.mnemonic.toLowerCase();
                             const opposite = mnem === 'inc' ? 'dec' : 'inc';
 
-                            if (nextMnem === opposite &&
-                                token.operands.length === 1 &&
-                                next.operands.length === 1) {
+                            if (nextMnem === opposite) {
+                                const op1 = token.operands[0];
+                                const op2 = next.operands[0];
 
-                                const reg1 = token.operands[0];
-                                const reg2 = next.operands[0];
-
-                                if (reg1.type === 'register' &&
-                                    reg2.type === 'register' &&
-                                    reg1.value.toLowerCase() === reg2.value.toLowerCase()) {
-
+                                // Match any operand type (register, index register, etc.)
+                                if (op1.type === op2.type && op1.value === op2.value) {
                                     // Remove both instructions
                                     i++; // Skip next instruction
                                     this.stats.peepholeOpts++;
-                                    this.stats.bytesSaved += 2; // 1 byte each
+                                    this.stats.bytesSaved += 2; // 1 byte each (or 2 for IX/IY)
                                     log(`  Removed ${mnem.toUpperCase()}/${opposite.toUpperCase()} pair at line ${token.lineNumber}`, 'debug');
                                     continue;
                                 }
@@ -8254,7 +8854,7 @@
             consoleOutput.innerHTML = '';
             symbolsOutput.innerHTML = '';
             assemblyWarningCount = 0; // Reset warning counter
-            log('Starting enhanced compilation...');
+            log(`AmysCVAssembler v${ASSEMBLER_VERSION} (${ASSEMBLER_EDITION})`);
             downloadBtn.classList.add('hidden');
             exportSymbolsBtn.classList.add('hidden');
             compiledBinary = null;
