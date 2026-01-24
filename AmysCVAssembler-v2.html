@@ -6354,7 +6354,18 @@
                 // We need to track where labels end up AFTER each optimization
                 const newSymbolTable = {};
 
+                // DEBUG: Log initial PC
+                log(`  Optimizer starting PC: 0x${pc.toString(16)} (firstOrg: ${this.assembler.firstOrg ? '0x' + this.assembler.firstOrg.toString(16) : 'null'})`, 'debug');
+
                 for (const token of tokens) {
+                    // Handle ORG directives to update PC
+                    if (token instanceof Directive && token.name === 'ORG') {
+                        pc = this.assembler.evaluateExpression(token.operands[0]);
+                        optimized.push(token);
+                        if (token.label) { newSymbolTable[token.label] = pc; }
+                        continue;
+                    }
+
                     // Update label positions in our new symbol table
                     if (token.label) {
                         newSymbolTable[token.label] = pc;
@@ -6367,18 +6378,21 @@
                         // Skip if dead code elimination was used (addresses are unstable)
                         if (this.config.peephole && !this.config.deadCode && mnem === 'jp' && token.operands.length > 0) {
                             const lastOp = token.operands[token.operands.length - 1];
+                            const targetLabel = lastOp.type === 'symbol' ? lastOp.value : `$${lastOp.value.toString(16)}`;
 
                             // Only optimize direct jumps (not JP (HL), JP (IX), etc.)
                             if (lastOp.type === 'symbol' || lastOp.type === 'immediate') {
                                 // Check if this is a conditional jump we can convert
                                 // JR only supports: Z, NZ, C, NC (NOT: PE, PO, P, M)
                                 let canConvert = true;
+                                let rejectReason = '';
                                 if (token.operands.length === 2) {
                                     // Conditional jump - check if condition is supported by JR
                                     const condition = token.operands[0].value.toLowerCase();
                                     const validConditions = ['z', 'nz', 'c', 'nc'];
                                     if (!validConditions.includes(condition)) {
                                         canConvert = false;
+                                        rejectReason = `unsupported condition '${condition}'`;
                                     }
                                 }
 
@@ -6389,11 +6403,16 @@
                                     // Title ($8024+): Cartridge title - converting JP→JR here would shift title data
                                     if (pc >= 0x8000 && pc <= 0x8023) {
                                         // Skip optimization in header + NMI region
+                                        log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - SKIP (in ROM header region)`, 'debug');
                                     } else {
                                         // Use NEW symbol table if target has been processed, otherwise use old
                                         const targetAddr = lastOp.type === 'symbol' && newSymbolTable[lastOp.value] !== undefined
                                             ? newSymbolTable[lastOp.value]
                                             : this.resolveAddress(lastOp);
+
+                                        // Calculate offset for JR (relative to PC after JR instruction)
+                                        const pcAfterJr = pc + 2; // JR is 2 bytes
+                                        const offset = targetAddr - pcAfterJr;
 
                                         // Use size 2 (JR size) for range check
                                         if (this.canUseRelativeJump(pc, targetAddr, 2)) {
@@ -6407,11 +6426,18 @@
                                             optimized.push(jrToken);
                                             this.stats.jpToJr++;
                                             this.stats.bytesSaved++;
+                                            log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} → JR (PC=$${pc.toString(16)}, target=$${targetAddr.toString(16)}, offset=${offset}) ✓`, 'debug');
                                             pc += 2; // JR is 2 bytes (saves 1 byte)
                                             continue;
+                                        } else {
+                                            log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - OUT OF RANGE (target=$${targetAddr.toString(16)}, offset=${offset}, need -126 to +129)`, 'debug');
                                         }
                                     }
+                                } else {
+                                    log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} - SKIP (${rejectReason})`, 'debug');
                                 }
+                            } else {
+                                log(`  [JP→JR] Line ${token.lineNumber}: JP indirect - SKIP (operand type: ${lastOp.type})`, 'debug');
                             }
                         }
 
@@ -6450,16 +6476,36 @@
                             pc += 1; // Fallback
                         }
                     } else if (token instanceof Directive) {
-                        // Update PC for directives
-                        if (token.name === 'ORG') {
-                            pc = token.operands[0].value;
-                        } else if (token.name === 'DB' || token.name === 'DEFB') {
-                            pc += token.operands.length;
-                        } else if (token.name === 'DW' || token.name === 'DEFW') {
+                        // Update PC for directives that emit data
+                        if (token.name === 'DB' || token.name === 'DEFB' || token.name === 'BYTE') {
+                            // Count bytes: strings count their length, everything else is 1 byte each
+                            for (const op of token.operands) {
+                                if (op.type === 'string') {
+                                    pc += op.value.length;
+                                } else {
+                                    pc += 1;
+                                }
+                            }
+                        } else if (token.name === 'DW' || token.name === 'DEFW' || token.name === 'WORD') {
                             pc += token.operands.length * 2;
-                        } else if (token.name === 'DS' || token.name === 'DEFS') {
-                            pc += token.operands[0].value;
+                        } else if (token.name === 'DS' || token.name === 'DEFS' || token.name === 'BLOCK') {
+                            const size = this.assembler.evaluateExpression(token.operands[0]);
+                            pc += size;
+                        } else if (token.name === 'DEFM' || token.name === 'ASCII' || token.name === 'TEXT') {
+                            for (const op of token.operands) {
+                                if (op.type === 'string') {
+                                    pc += op.value.length;
+                                } else {
+                                    pc += 1;
+                                }
+                            }
+                        } else if (token.name === 'INCBIN') {
+                            // INCBIN size is complex - use stored value if available
+                            if (token.incbinSize !== undefined) {
+                                pc += token.incbinSize;
+                            }
                         }
+                        // Note: ORG is handled at the start of the loop
                     }
 
                     optimized.push(token);

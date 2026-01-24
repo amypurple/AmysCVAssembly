@@ -7976,66 +7976,43 @@
             }
 
             markReachableFrom(startIdx, tokens, reachable, labels) {
-                if (startIdx >= tokens.length || reachable.has(startIdx)) {
-                    return; // Already processed or out of bounds
-                }
-
-                let currentlyReachable = true;
+                if (startIdx >= tokens.length) return;
+                if (reachable.has(startIdx)) return; // Already visited
 
                 for (let i = startIdx; i < tokens.length; i++) {
+                    if (reachable.has(i)) break; // Already explored this path - prevents infinite loops
                     const token = tokens[i];
-
-                    // Labels are always entry points
-                    if (token.label) {
-                        currentlyReachable = true;
-                    }
-
-                    if (!(token instanceof Instruction)) {
-                        continue;
-                    }
-
-                    if (!currentlyReachable) {
-                        break; // Stop at unreachable code
-                    }
 
                     reachable.add(i);
 
-                    const mnem = token.mnemonic.toLowerCase();
+                    if (token instanceof Instruction) {
+                        const mnem = token.mnemonic.toLowerCase();
 
-                    // Handle control flow instructions
-                    if (['jp', 'jr'].includes(mnem)) {
-                        const lastOp = token.operands[token.operands.length - 1];
-
-                        // Mark jump target as reachable
-                        if (lastOp.type === 'symbol' || lastOp.type === 'label') {
-                            const targetLabel = lastOp.value;
-                            if (labels.has(targetLabel)) {
-                                const targetIdx = labels.get(targetLabel);
-                                this.markReachableFrom(targetIdx, tokens, reachable, labels);
+                        // Track jumps and calls
+                        if (['jp', 'jr'].includes(mnem)) {
+                            const lastOp = token.operands[token.operands.length - 1];
+                            if (lastOp.type === 'symbol' && labels.has(lastOp.value)) {
+                                // Recursively mark jump target
+                                this.markReachableFrom(labels.get(lastOp.value), tokens, reachable, labels);
                             }
-                        }
 
-                        // Unconditional jump ends current sequential flow
-                        if (token.operands.length === 1) {
-                            currentlyReachable = false;
-                        }
-                    } else if (mnem === 'call') {
-                        // CALL doesn't end flow - it returns!
-                        const lastOp = token.operands[token.operands.length - 1];
-
-                        // Mark call target as reachable
-                        if (lastOp.type === 'symbol' || lastOp.type === 'label') {
-                            const targetLabel = lastOp.value;
-                            if (labels.has(targetLabel)) {
-                                const targetIdx = labels.get(targetLabel);
-                                this.markReachableFrom(targetIdx, tokens, reachable, labels);
+                            // Unconditional jump ends current flow
+                            if (token.operands.length === 1) {
+                                break;
                             }
-                        }
-                        // Continue to next instruction after CALL
-                    } else if (['ret', 'reti', 'retn'].includes(mnem)) {
-                        // Return ends sequential flow (unless conditional)
-                        if (token.operands.length === 0) {
-                            currentlyReachable = false;
+                        } else if (mnem === 'call') {
+                            // CALL doesn't end flow - it returns!
+                            const lastOp = token.operands[token.operands.length - 1];
+                            if (lastOp.type === 'symbol' && labels.has(lastOp.value)) {
+                                // Recursively mark call target
+                                this.markReachableFrom(labels.get(lastOp.value), tokens, reachable, labels);
+                            }
+                            // Continue to next instruction after CALL
+                        } else if (['ret', 'reti', 'retn'].includes(mnem)) {
+                            // Return ends sequential flow (unless conditional)
+                            if (token.operands.length === 0) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -8341,6 +8318,38 @@
                     if (!(token instanceof Instruction)) {
                         optimized.push(token);
                         if (token.label) { newSymbolTable[token.label] = pc; }
+
+                        // Update PC for directives that emit data
+                        if (token instanceof Directive) {
+                            if (token.name === 'DB' || token.name === 'DEFB' || token.name === 'BYTE') {
+                                // Count bytes: strings count their length, everything else is 1 byte each
+                                for (const op of token.operands) {
+                                    if (op.type === 'string') {
+                                        pc += op.value.length;
+                                    } else {
+                                        pc += 1;
+                                    }
+                                }
+                            } else if (token.name === 'DW' || token.name === 'DEFW' || token.name === 'WORD') {
+                                pc += token.operands.length * 2;
+                            } else if (token.name === 'DS' || token.name === 'DEFS' || token.name === 'BLOCK') {
+                                const size = this.assembler.evaluateExpression(token.operands[0]);
+                                pc += size;
+                            } else if (token.name === 'DEFM' || token.name === 'ASCII' || token.name === 'TEXT') {
+                                for (const op of token.operands) {
+                                    if (op.type === 'string') {
+                                        pc += op.value.length;
+                                    } else {
+                                        pc += 1;
+                                    }
+                                }
+                            } else if (token.name === 'INCBIN') {
+                                // INCBIN size is complex - use stored value if available
+                                if (token.incbinSize !== undefined) {
+                                    pc += token.incbinSize;
+                                }
+                            }
+                        }
                         continue;
                     }
 
@@ -8350,18 +8359,21 @@
                     // Skip if dead code elimination was used (addresses are unstable)
                     if (this.config.peephole && !this.config.deadCode && mnem === 'jp' && token.operands.length > 0) {
                         const lastOp = token.operands[token.operands.length - 1];
+                        const targetLabel = lastOp.type === 'symbol' ? lastOp.value : `$${lastOp.value.toString(16)}`;
 
                         // Only optimize direct jumps (not JP (HL), JP (IX), etc.)
                         if (lastOp.type === 'symbol' || lastOp.type === 'immediate') {
                             // Check if this is a conditional jump we can convert
                             // JR only supports: Z, NZ, C, NC (NOT: PE, PO, P, M)
                             let canConvert = true;
+                            let rejectReason = '';
                             if (token.operands.length === 2) {
                                 // Conditional jump - check if condition is supported by JR
                                 const condition = token.operands[0].value.toLowerCase();
                                 const validConditions = ['z', 'nz', 'c', 'nc'];
                                 if (!validConditions.includes(condition)) {
                                     canConvert = false;
+                                    rejectReason = `unsupported condition '${condition}'`;
                                 }
                             }
 
@@ -8372,11 +8384,16 @@
                                 // Title ($8024+): Cartridge title - converting JP→JR here would shift title data
                                 if (pc >= 0x8000 && pc <= 0x8023) {
                                     // Skip optimization in header + NMI region
+                                    log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - SKIP (in ROM header region)`, 'debug');
                                 } else {
                                     // Use NEW symbol table if target has been processed, otherwise use old
                                     const targetAddr = lastOp.type === 'symbol' && newSymbolTable[lastOp.value] !== undefined
                                         ? newSymbolTable[lastOp.value]
                                         : this.resolveAddress(lastOp);
+
+                                    // Calculate offset for JR (relative to PC after JR instruction)
+                                    const pcAfterJr = pc + 2; // JR is 2 bytes
+                                    const offset = targetAddr - pcAfterJr;
 
                                     // Use size 2 (JR size) for range check
                                     if (this.canUseRelativeJump(pc, targetAddr, 2)) {
@@ -8390,11 +8407,18 @@
                                         optimized.push(jrToken);
                                         this.stats.jpToJr++;
                                         this.stats.bytesSaved++;
+                                        log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} → JR (PC=$${pc.toString(16)}, target=$${targetAddr.toString(16)}, offset=${offset}) ✓`, 'debug');
                                         pc += 2; // JR is 2 bytes (saves 1 byte)
                                         continue;
+                                    } else {
+                                        log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - OUT OF RANGE (target=$${targetAddr.toString(16)}, offset=${offset}, need -126 to +129)`, 'debug');
                                     }
                                 }
+                            } else {
+                                log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} - SKIP (${rejectReason})`, 'debug');
                             }
+                        } else {
+                            log(`  [JP→JR] Line ${token.lineNumber}: JP indirect - SKIP (operand type: ${lastOp.type})`, 'debug');
                         }
                     }
 
