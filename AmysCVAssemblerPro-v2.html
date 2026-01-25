@@ -1561,6 +1561,25 @@
                     noApply: true
                 },
                 {
+                    name: 'INC HL x2 to LD DE,2; ADD HL,DE',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(inc|INC)\s+(hl|HL)\s*(?:;.*)?$/.test(line),
+                    suggestion: 'add hl,de (if DE=2)',
+                    explanation: 'Two INC HL (2 bytes, 12 T-states) can be LD DE,2; ADD HL,DE (4 bytes, 21 T-states) - only worthwhile if repeated or DE already loaded.',
+                    savings: 'Context-dependent',
+                    noApply: true
+                },
+                {
+                    name: 'NEG to CPL; INC A',
+                    category: 'peephole',
+                    detect: (line) => /^\s*(neg|NEG)\s*(?:;.*)?$/.test(line),
+                    suggestion: 'cpl; inc a (same result)',
+                    explanation: 'NEG (2 bytes, ED prefix) negates A. CPL; INC A (2 bytes, no prefix) does the same but may affect flags differently.',
+                    savings: 'Same size, different flags',
+                    warning: 'Flags differ! NEG sets C if A≠0, CPL;INC sets C on overflow.',
+                    noApply: true
+                },
+                {
                     name: 'SUB A to XOR A',
                     category: 'peephole',
                     detect: (line) => /^\s*(sub|SUB)\s+[aA]\s*(?:;.*)?$/.test(line),
@@ -1712,6 +1731,31 @@
                     return indent + 'add hl,hl\n';
                 }
             },
+            {
+                name: 'XOR A; LD r,A to LD r,0',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    const xor = line1.match(/^\s*(xor|XOR)\s+[aA]\s*(?:;.*)?$/i);
+                    const ld = line2.match(/^\s*(ld|LD)\s+([bcdehl])\s*,\s*[aA]\s*(?:;.*)?$/i);
+                    return xor && ld;
+                },
+                suggestion: 'ld r,0 (if A not needed)',
+                explanation: 'XOR A then LD r,A (2 bytes) can be LD r,0 (2 bytes) - same size but keeps A unchanged.',
+                savings: 'Preserves A register',
+                warning: 'Only if you don\'t need A to be zero afterwards.',
+                noApply: true
+            },
+            {
+                name: 'CP 0 to OR A',
+                category: 'peephole',
+                detect: (line1, line2) => {
+                    // Single line pattern - line2 not used
+                    return false; // Handled in single-line patterns
+                },
+                suggestion: 'or a',
+                explanation: 'CP 0 (2 bytes) can be OR A (1 byte). Both set Z flag if A is zero.',
+                savings: '1 byte, 3 T-states'
+            }
         ];
 
         // 4-line patterns for more complex optimizations
@@ -4767,6 +4811,40 @@
                         if (headerInfo.valid) {
                             log(`Valid ColecoVision ROM: ${headerInfo.usesDefaultScreen ? 'With' : 'Without'} default title screen`, 'success');
                         }
+
+                        // DEBUG: Dump first 33 bytes of ROM header
+                        log(`  DEBUG: ColecoVision ROM Header ($8000-$8020):`, 'debug');
+                        const headerBytes = [];
+                        for (let i = 0; i < 33 && i < compiledBinary.length; i++) {
+                            headerBytes.push(compiledBinary[i].toString(16).padStart(2, '0').toUpperCase());
+                        }
+                        // Display in rows of 16 bytes
+                        for (let row = 0; row < 3; row++) {
+                            const start = row * 16;
+                            const end = Math.min(start + 16, headerBytes.length);
+                            const addr = (0x8000 + start).toString(16).toUpperCase().padStart(4, '0');
+                            const bytes = headerBytes.slice(start, end).join(' ');
+                            log(`    $${addr}: ${bytes}`, 'debug');
+                        }
+                        // Decode RST vectors
+                        log(`  DEBUG: RST Vector Contents:`, 'debug');
+                        const rstLocs = [
+                            { addr: 0x0C, name: 'RST $08' },
+                            { addr: 0x0F, name: 'RST $10' },
+                            { addr: 0x12, name: 'RST $18' },
+                            { addr: 0x15, name: 'RST $20' },
+                            { addr: 0x18, name: 'RST $28' },
+                            { addr: 0x1B, name: 'RST $30' },
+                            { addr: 0x1E, name: 'RST $38' }
+                        ];
+                        rstLocs.forEach(rst => {
+                            if (rst.addr + 2 < compiledBinary.length) {
+                                const b1 = compiledBinary[rst.addr].toString(16).padStart(2, '0').toUpperCase();
+                                const b2 = compiledBinary[rst.addr + 1].toString(16).padStart(2, '0').toUpperCase();
+                                const b3 = compiledBinary[rst.addr + 2].toString(16).padStart(2, '0').toUpperCase();
+                                log(`    ${rst.name} ($${(0x8000 + rst.addr).toString(16).toUpperCase()}): ${b1} ${b2} ${b3}`, 'debug');
+                            }
+                        });
                     }
 
                     // --- Size metrics calculation ---
@@ -5760,11 +5838,6 @@
                         if (token.label) {
                             const processedLabel = this.processTemporarySymbol(token.label);
 
-                            // DEBUG: Log macro labels
-                            if (processedLabel.startsWith('__') && this.currentLine >= 900 && this.currentLine <= 920) {
-                                log(`DEBUG MACRO LABEL: Line ${this.currentLine}, label '${processedLabel}', PC ${this.pc}`, 'debug');
-                            }
-
                             if (this.symbolTable[processedLabel] !== undefined) {
                                log(`Warning: Redefining label '${processedLabel}' at line ${this.currentLine}`, 'warn');
                             }
@@ -6403,9 +6476,6 @@
                 }
                 
                 log('Symbol table built successfully.');
-                console.log('Symbol Table:', this.symbolTable);
-                console.log('Symbol Info:', this.symbolInfo);
-                console.log('File Map:', this.fileMap);
             }
 
             findFile(filename) {
@@ -7102,16 +7172,6 @@
                 if (breakpointsSet && breakpointsSet.size > 0) {
                     const breakpointAddresses = [];
                     const sortedBreakpoints = Array.from(breakpointsSet).sort((a, b) => a - b);
-
-                    // DEBUG: Log what's in the lineToAddressMap
-                    console.log('=== Breakpoint Debug ===');
-                    console.log('Breakpoint line numbers:', sortedBreakpoints);
-                    console.log('lineToAddressMap size:', this.lineToAddressMap.size);
-                    console.log('lineToAddressMap contents (first 20):');
-                    let count = 0;
-                    for (const [line, addr] of this.lineToAddressMap) {
-                        if (count++ < 20) console.log(`  Line ${line} -> 0x${addr.toString(16)}`);
-                    }
 
                     // First, add comment section for reference
                     output += '; === Breakpoints ===\n';

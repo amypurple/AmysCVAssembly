@@ -9,18 +9,35 @@ All notable changes to this project will be documented in this file.
 ### New Features
 
 **1. Assembler-Level Commands**
-- print: display messages during assembly
-- fail: stop assembly with an error message
-- stop: halt assembly immediately
-- let: assign values to symbols at assembly time
-- repeat/rend: fixed-count loop for code generation
-- while/wend/endw: conditional loop for assembly-time logic
-- switch/case/default/endswitch: multi-branch selection at assembly time
+- `PRINT`: Display messages during assembly with expression evaluation
+- `FAIL`: Stop assembly with an error message
+- `STOP`: Halt assembly immediately without error
+- `LET`: Assign mutable values to symbols at assembly time
+- `REPEAT/REND/ENDR`: Fixed-count loop for code generation (with optional counter variable)
+- `WHILE/WEND/ENDW`: Conditional loop for assembly-time logic
+- `SWITCH/CASE/DEFAULT/ENDSWITCH`: Multi-branch selection at assembly time
 
 **2. Math Expression Parsing**
-- Trigonometric functions: SIN, COS, TAN, ASIN, ACOS, ATAN (degree-based)
-- Logarithmic/Exponential: LOG, LOG2, LOG10, EXP, SQRT
-- Utility functions: ABS, FLOOR, CEIL
+- Trigonometric functions: `SIN`, `COS`, `TAN`, `ASIN`, `ACOS`, `ATAN`, `ATAN2` (degree-based)
+- Logarithmic/Exponential: `LOG`, `LOG2`, `LOG10`, `EXP`, `SQRT`, `POW`
+- Rounding functions: `FLOOR`, `CEIL`, `ROUND`, `INT`, `FRAC`
+- Utility functions: `ABS`, `SGN`, `MIN`, `MAX`, `RND`
+
+### Bug Fixes
+
+**Optimization Assistant Panel**
+- Synchronized optimization patterns between Standard and Pro versions
+- Both versions now detect the same code improvement suggestions
+- Removed dangerous `LD BC,nnnn; LD A,C → LD A,nn` pattern (could break code using BC)
+
+**Build-Time Optimizer**
+- Fixed ROM size discrepancy between Standard and Pro versions
+- Pro version now produces identical output to Standard when optimizer is enabled
+
+**Debug Output**
+- Added DEBUG hex dump output to Pro version (matches Standard)
+- Removed residual debug console.log statements from WHILE/SWITCH testing
+- Cleaner console output in release builds
 
 ---
 

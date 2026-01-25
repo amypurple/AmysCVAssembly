@@ -503,7 +503,6 @@
 
         // Toggle breakpoint on gutter click
         editor.on('gutterClick', function(cm, lineNum, gutterName, event) {
-            console.log('Gutter clicked:', gutterName, 'line:', lineNum);
             if (gutterName === 'breakpoints') {
                 const info = cm.lineInfo(lineNum);
 
@@ -1396,15 +1395,6 @@
                     explanation: 'SUB A and XOR A both set A=0. However flags differ: SUB sets N=1, C=0, H=0. XOR sets N=0, P/V=parity, H=0, C=0.',
                     savings: 'Same size - style preference only',
                     warning: 'Flags differ! SUB A: N=1, C=0. XOR A: N=0, P/V=1. Only change if flags not used.',
-                    noApply: true
-                },
-                {
-                    name: 'LD BC,nnnn; LD A,C to LD A,nn',
-                    category: 'peephole',
-                    detect: (line) => /^\s*(ld|LD)\s+(bc|BC)\s*,\s*(\$[0-9a-f]+|0x[0-9a-f]+|[0-9]+)\s*(?:;.*)?$/i.test(line),
-                    suggestion: 'Check if only C is needed',
-                    explanation: 'If you only need the low byte in A, LD A,nn (2 bytes) is smaller than LD BC,nnnn; LD A,C (4 bytes).',
-                    savings: '2 bytes (if applicable)',
                     noApply: true
                 },
                 {
@@ -4850,9 +4840,6 @@
                 }
                 
                 log('Symbol table built successfully.');
-                console.log('Symbol Table:', this.symbolTable);
-                console.log('Symbol Info:', this.symbolInfo);
-                console.log('File Map:', this.fileMap);
             }
 
             findFile(filename) {
