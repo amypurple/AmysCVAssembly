@@ -6344,7 +6344,9 @@
                 // DEBUG: Log initial PC
                 log(`  Optimizer starting PC: 0x${pc.toString(16)} (firstOrg: ${this.assembler.firstOrg ? '0x' + this.assembler.firstOrg.toString(16) : 'null'})`, 'debug');
 
+                let tokenIdx = -1;
                 for (const token of tokens) {
+                    tokenIdx++;
                     // Handle ORG directives to update PC
                     if (token instanceof Directive && token.name === 'ORG') {
                         pc = this.assembler.evaluateExpression(token.operands[0]);
@@ -6417,7 +6419,7 @@
                                             pc += 2; // JR is 2 bytes (saves 1 byte)
                                             continue;
                                         } else {
-                                            log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - OUT OF RANGE (target=$${targetAddr.toString(16)}, offset=${offset}, need -126 to +129)`, 'debug');
+                                            log(`  [JP→JR] Line ${token.lineNumber}: JP ${targetLabel} at $${pc.toString(16)} - OUT OF RANGE (target=$${targetAddr.toString(16)}, offset=${offset}, need -128 to +127)`, 'debug');
                                         }
                                     }
                                 } else {
@@ -6429,6 +6431,9 @@
                         }
 
                         // LD A,0 → XOR A optimization (part of peephole optimizations)
+                        // Guard: skip if the next meaningful instruction reads flags that were
+                        // set before this LD A,0 — XOR A overwrites all flags, so a conditional
+                        // branch immediately after would test XOR's Z=1 instead of the prior result.
                         if (this.config.peephole &&
                             mnem === 'ld' &&
                             token.operands.length === 2 &&
@@ -6437,6 +6442,37 @@
                             token.operands[1].type === 'immediate' &&
                             token.operands[1].value === 0) {
 
+                            let nextMeaningful = null;
+                            for (let lookahead = tokenIdx + 1; lookahead < tokens.length; lookahead++) {
+                                const candidate = tokens[lookahead];
+                                if (candidate instanceof Instruction) {
+                                    nextMeaningful = candidate;
+                                    break;
+                                }
+                                if (candidate instanceof Directive && candidate.name === 'ORG') {
+                                    break;
+                                }
+                            }
+
+                            const nextUsesFlags = nextMeaningful &&
+                                (
+                                    ((nextMeaningful.mnemonic.toLowerCase() === 'jr' ||
+                                      nextMeaningful.mnemonic.toLowerCase() === 'jp' ||
+                                      nextMeaningful.mnemonic.toLowerCase() === 'call') &&
+                                     nextMeaningful.operands.length > 1 &&
+                                     nextMeaningful.operands[0].type === 'condition') ||
+                                    (nextMeaningful.mnemonic.toLowerCase() === 'ret' &&
+                                     nextMeaningful.operands.length === 1 &&
+                                     nextMeaningful.operands[0].type === 'condition')
+                                );
+
+                            if (nextUsesFlags) {
+                                if (token.label) { newSymbolTable[token.label] = pc; }
+                                optimized.push(token);
+                                pc += 2;
+                                continue;
+                            }
+
                             const xorToken = new Instruction(
                                 token.label,
                                 'xor',
@@ -6444,6 +6480,7 @@
                                 token.lineNumber
                             );
                             optimized.push(xorToken);
+                            if (token.label) { newSymbolTable[token.label] = pc; }
                             this.stats.ldToXor++;
                             this.stats.bytesSaved++;
                             log(`  Optimized LD A,0 to XOR A at line ${token.lineNumber}`, 'debug');
@@ -6506,12 +6543,12 @@
             }
 
             canUseRelativeJump(currentPC, targetAddr, instrSize) {
-                // JR offset is relative to PC AFTER the instruction
-                // JR uses signed 8-bit offset: -126 to +129 bytes
-                // No safety margin needed - iterative optimization converges to stable addresses
+                // JR displacement is a signed 8-bit value added to PC after the instruction.
+                // Valid encoding range: exactly -128..+127.
+                // Offsets +128/+129 would wrap to -128/-127 in the byte — wrong target.
                 const pcAfter = currentPC + instrSize;
                 const offset = targetAddr - pcAfter;
-                return offset >= -126 && offset <= 129;
+                return offset >= -128 && offset <= 127;
             }
 
             resolveAddress(operand) {
@@ -6666,30 +6703,10 @@
                     // ========================================
                     // Phase 1.1: Arithmetic No-Ops
                     // ========================================
-
-                    // Pattern: ADD A,0 / ADC A,0 / SUB 0 / SBC A,0 / OR 0 / XOR 0
-                    if (['add', 'adc', 'sub', 'sbc', 'or', 'xor'].includes(mnem) &&
-                        token.operands.length >= 1) {
-
-                        const lastOp = token.operands[token.operands.length - 1];
-                        if (lastOp.type === 'immediate' && lastOp.value === 0) {
-                            this.stats.peepholeOpts++;
-                            this.stats.bytesSaved += 2; // Most arithmetic with immediate are 2 bytes
-                            log(`  Removed no-op ${mnem.toUpperCase()} ${token.operands.map(o => o.value).join(',')} at line ${token.lineNumber}`, 'debug');
-                            continue; // Skip this instruction
-                        }
-                    }
-
-                    // Pattern: AND 0xFF (no-op for 8-bit register)
-                    if (mnem === 'and' && token.operands.length >= 1) {
-                        const lastOp = token.operands[token.operands.length - 1];
-                        if (lastOp.type === 'immediate' && lastOp.value === 0xFF) {
-                            this.stats.peepholeOpts++;
-                            this.stats.bytesSaved += 2;
-                            log(`  Removed no-op AND 0xFF at line ${token.lineNumber}`, 'debug');
-                            continue;
-                        }
-                    }
+                    // Arithmetic/logical instructions are not safe to remove as "no-ops".
+                    // Even when the data result is unchanged, flags and carry are often
+                    // intentionally consumed by following code (e.g. SBC A,0 / ADC A,0
+                    // are used for multi-byte carry/borrow propagation and must not be removed).
 
                     // ========================================
                     // Phase 1.2: Redundant Loads
@@ -6710,8 +6727,10 @@
                                 dest1.value.toLowerCase() === dest2.value.toLowerCase()) {
 
                                 // Both are immediate loads?
+                                // Guard: skip if the first LD carries a label (jump target).
                                 if (token.operands[1].type === 'immediate' &&
-                                    next.operands[1].type === 'immediate') {
+                                    next.operands[1].type === 'immediate' &&
+                                    !token.label) {
                                     this.stats.peepholeOpts++;
                                     this.stats.bytesSaved += 2;
                                     log(`  Removed redundant LD ${dest1.value},${token.operands[1].value} (overwritten) at line ${token.lineNumber}`, 'debug');
@@ -6725,7 +6744,10 @@
                     // Phase 1.3: INC/DEC Cancellation
                     // ========================================
 
-                    // Pattern: INC r followed by DEC r (or vice versa)
+                    // Pattern: INC rr followed by DEC rr (16-bit pairs only).
+                    // 8-bit INC/DEC set S, Z, H, P/V flags; canceling them would change
+                    // the flags visible to following code.  16-bit INC/DEC leave all flags
+                    // unchanged, so the pair is always a true no-op.
                     if (['inc', 'dec'].includes(mnem) && i + 1 < tokens.length && token.operands.length === 1) {
                         const next = tokens[i + 1];
                         if (next instanceof Instruction && next.operands.length === 1) {
@@ -6736,7 +6758,12 @@
                                 const op1 = token.operands[0];
                                 const op2 = next.operands[0];
 
-                                if (op1.type === op2.type && op1.value === op2.value) {
+                                // Only cancel 16-bit register pairs (flags unaffected).
+                                const sixteenBitRegs = new Set(['bc', 'de', 'hl', 'sp', 'ix', 'iy']);
+                                if (op1.type === op2.type &&
+                                    op1.value === op2.value &&
+                                    sixteenBitRegs.has(op1.value.toLowerCase()) &&
+                                    !token.label && !next.label) {
                                     // Remove both
                                     i++; // Skip next
                                     this.stats.peepholeOpts++;
@@ -6785,7 +6812,8 @@
                             const op1 = token.operands[0];
                             const op2 = next.operands[0];
 
-                            if (op1.value === op2.value) {
+                            // Guard: either instruction might carry a label (jump target).
+                            if (op1.value === op2.value && !token.label && !next.label) {
                                 // Skip both instructions
                                 i++; // Skip POP
                                 this.stats.peepholeOpts++;
@@ -6803,6 +6831,7 @@
                     // Pattern: LD reg,reg (no-op when same register)
                     if (mnem === 'ld' &&
                         token.operands.length === 2 &&
+                        !token.label &&
                         token.operands[0].type === 'register' &&
                         token.operands[1].type === 'register' &&
                         token.operands[0].value.toLowerCase() === token.operands[1].value.toLowerCase()) {
@@ -6824,7 +6853,8 @@
                             next.operands[0].type === 'register' &&
                             next.operands[1].type === 'register' &&
                             token.operands[0].value.toLowerCase() === next.operands[1].value.toLowerCase() &&
-                            token.operands[1].value.toLowerCase() === next.operands[0].value.toLowerCase()) {
+                            token.operands[1].value.toLowerCase() === next.operands[0].value.toLowerCase() &&
+                            !next.label) {
 
                             optimized.push(token); // Keep first
                             i++; // Skip second
